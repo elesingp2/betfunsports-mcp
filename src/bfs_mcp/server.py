@@ -1,10 +1,10 @@
-"""BFS MCP Server — platform API for betfunsports.com."""
+"""BFS MCP Server — headless browser bridge for betfunsports.com."""
 
 from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
@@ -12,52 +12,9 @@ from .browser import BFSBrowser
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
 
-mcp = FastMCP(
-    "bfs",
-    instructions="""\
-# Betfunsports Platform API
+_SKILL = (Path(__file__).resolve().parent.parent.parent / "skill.md").read_text(encoding="utf-8")
 
-API for betfunsports.com — a P2P sports prediction platform where players compete for prize pools.
-
-## How it works
-- Players place bets (forecasts) on sports events via coupons
-- All bets form a prize pool that is FULLY distributed among winners
-- Top 50% of bets win, ranked by forecast accuracy (0-100 points)
-- Winnings are proportional to accuracy × bet size (min coefficient 1.3)
-
-## Rooms (tables)
-| Room    | Index | Currency      | Range   | Fee  |
-|---------|-------|---------------|---------|------|
-| Wooden  | 0     | BFS (free)    | 1-10    | 0%   |
-| Bronze  | 1     | EUR           | 1-5     | 10%  |
-| Silver  | 2     | EUR           | 10-50   | 7.5% |
-| Golden  | 3     | EUR           | 100-500 | 5%   |
-
-Start with Wooden (free BFS) to learn, then move to Bronze/Silver/Golden to earn EUR.
-
-## Sports & coupon types
-Football, tennis, hockey, basketball, Formula 1, biathlon, volleyball, boxing, MMA.
-Main coupon types: 1X2 (match outcome), Score (exact score), Goal Difference, Match Winner.
-
-## Earning strategy
-1. Authenticate → browse available coupons → analyze events
-2. Export bet history (CSV) to study past accuracy patterns
-3. Place bets where you have highest confidence in outcome
-4. Wooden room for testing strategy (free), Silver/Golden for real earnings
-5. Accuracy is key: 100-point forecasts ALWAYS win, even if >50% get them
-
-## Betting flow
-1. `bfs_auth_status` — check if logged in
-2. `bfs_login` — authenticate
-3. `bfs_coupons` — browse available coupons
-4. `bfs_coupon_details` — get events, outcomes, rooms for a specific coupon
-5. `bfs_place_bet` — place the bet
-6. `bfs_bet_history` — review past bets and results (CSV export)
-
-## 1X2 outcome codes
-- "8" = 1 (home win), "9" = X (draw), "10" = 2 (away win)
-""",
-)
+mcp = FastMCP("bfs", instructions=_SKILL)
 
 _b = BFSBrowser()
 _j = lambda x: json.dumps(x, ensure_ascii=False, default=str)
@@ -66,7 +23,7 @@ async def _e():
     await _b.start()
 
 
-# ── Platform API ──────────────────────────────────────────────────────
+# ── Registration & auth ──────────────────────────────────────────────
 
 @mcp.tool()
 async def bfs_register(username: str, email: str, password: str,
@@ -94,8 +51,8 @@ async def bfs_confirm_registration(confirmation_url: str) -> str:
 
 @mcp.tool()
 async def bfs_login(email: str, password: str) -> str:
-    """Authenticate. Returns balances or error if account is already logged in elsewhere.
-    If error='invalidLoginMessage=Player+already+logged+in', the user must logout from their other session first."""
+    """Authenticate. Returns balances or error.
+    If 'Player already logged in' — the user must logout from their other session first."""
     await _e()
     return _j(await _b.login(email, password))
 
@@ -114,13 +71,7 @@ async def bfs_auth_status() -> str:
     return _j((await _b.state()).to_dict())
 
 
-@mcp.tool()
-async def bfs_active_bets() -> str:
-    """Get currently active (unresolved) bets. These are bets waiting for event results.
-    Returns CSV with: ID, Coupon, Date, Stake. Use for portfolio monitoring."""
-    await _e()
-    return _j(await _b.active_bets())
-
+# ── Betting ──────────────────────────────────────────────────────────
 
 @mcp.tool()
 async def bfs_coupons() -> str:
@@ -152,10 +103,20 @@ async def bfs_place_bet(coupon_path: str, selections: str,
     return _j(await _b.place_bet(coupon_path, sel, room_index, stake or None))
 
 
+# ── Monitoring ───────────────────────────────────────────────────────
+
+@mcp.tool()
+async def bfs_active_bets() -> str:
+    """Get currently active (unresolved) bets waiting for event results.
+    Returns CSV with: ID, Coupon, Date, Stake."""
+    await _e()
+    return _j(await _b.active_bets())
+
+
 @mcp.tool()
 async def bfs_bet_history() -> str:
-    """Export bet history as CSV. Contains: ID, Coupon, Date, Stake, Points (accuracy), Winning.
-    Use this data to analyze prediction patterns and improve accuracy."""
+    """Export bet history as CSV: ID, Coupon, Date, Stake, Points (accuracy), Winning.
+    Use for strategy analysis."""
     await _e()
     return _j(await _b.bet_history())
 
@@ -175,7 +136,7 @@ async def bfs_payment_methods() -> str:
     return (await _b.text("#row-content"))[:4000]
 
 
-# ── Low-level page tools ─────────────────────────────────────────────
+# ── Page tools (advanced) ────────────────────────────────────────────
 
 @mcp.tool()
 async def page_open(url: str) -> str:
