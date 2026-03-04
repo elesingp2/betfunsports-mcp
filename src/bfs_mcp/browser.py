@@ -179,64 +179,123 @@ class BFSBrowser:
         if not form_exists:
             return {"success": False, "error": "registration form not found (may be logged in)"}
 
-        # Fill visible fields
         await self.page.fill("#oldUame", username)
         await self.page.fill("#oail", email)
         await self.page.fill("#password0", password)
         await self.page.fill("#password2", password)
         await self.page.fill("#firstName", first_name)
         await self.page.fill("#lastName", last_name)
-        await self.page.fill("#fbirthDate", birth_date)
+
+        # DatePicker field — set value via JS to bypass widget restrictions
+        await self.page.evaluate(
+            f'document.getElementById("fbirthDate").value = {json.dumps(birth_date)}'
+        )
+
         await self.page.fill("#phone", phone)
         await self.page.select_option("#countryCode", country_code)
 
-        if city:
-            await self.page.fill("#cityName", city)
-        if address:
-            await self.page.fill("#addressLine1", address)
-        if zip_code:
-            await self.page.fill("#zipCode", zip_code)
+        await self.page.fill("#cityName", city or "-")
+        await self.page.fill("#addressLine1", address or "-")
+        # zipCode is type=number, use a placeholder if empty
+        await self.page.evaluate(
+            f'document.getElementById("zipCode").value = {json.dumps(zip_code or "00000")}'
+        )
 
         if sex == "female":
             await self.page.click("#sex_female", force=True)
 
-        # Accept terms
         cb = self.page.locator("#fform_registration input[type='checkbox']")
         for i in range(await cb.count()):
             if not await cb.nth(i).is_checked():
                 await cb.nth(i).check(force=True)
 
-        # Fill honeypot hidden fields via JS
+        # Honeypot hidden fields expected by the server (remove maxlength first)
         await self.page.evaluate(f"""() => {{
             const f = document.getElementById('fform_registration');
             if (!f) return;
-            const h = (id, val) => {{ const e = f.querySelector('#'+id); if(e) e.value = val; }};
+            const h = (id, val) => {{
+                const e = f.querySelector('#'+id);
+                if (!e) return;
+                e.removeAttribute('maxlength');
+                e.value = val;
+            }};
             h('username', {json.dumps(username)});
             h('email', {json.dumps(email)});
             h('password', {json.dumps(password)});
         }}""")
 
-        # Submit
+        initial_url = self.page.url
         btn = self.page.locator('#fform_registration button[type="submit"], #fform_registration input[type="submit"]')
         if await btn.count() > 0:
             await btn.first.click(force=True)
         else:
             await self.page.evaluate("document.getElementById('fform_registration').submit()")
 
-        await self.page.wait_for_timeout(3000)
+        await self.page.wait_for_timeout(4000)
 
+        new_url = self.page.url
         txt = await self.text("#row-content")
-        url = self.page.url
         errors = await self.page.locator("label.error, .alert-danger, .error-message").all_text_contents()
         errors = [e.strip() for e in errors if e.strip()]
 
-        success = any(kw in txt.lower() for kw in ["success", "welcome", "confirm", "verify", "email sent", "registered", "thank"])
+        navigated = new_url != initial_url
+        low = txt.lower()
+        success_keywords = ["success", "welcome", "email sent", "registered",
+                            "thank", "verify your email", "check your email",
+                            "confirmation link", "подтвердите",
+                            "finishing registration", "confirmation email"]
+        has_keyword = any(kw in low for kw in success_keywords)
+        still_on_form = "join the club" in low or "/fullRegistration" in new_url
+
+        success = (has_keyword or navigated) and not still_on_form
+        needs_confirmation = any(kw in low for kw in
+                                 ["confirmation email", "finishing registration",
+                                  "verify your email", "check your email"])
+
+        mailbox_link = await self.page.evaluate("""() => {
+            const a = document.querySelector('#row-content a[href*="mail"]');
+            return a ? a.href : null;
+        }""")
+
+        result: dict[str, Any] = {
+            "success": success,
+            "url": new_url,
+            "errors": errors or None,
+            "page_text": txt[:800],
+        }
+        if needs_confirmation:
+            result["needs_email_confirmation"] = True
+            result["message"] = "Check your inbox and click the confirmation link to activate the account."
+            if mailbox_link:
+                result["mailbox_link"] = mailbox_link
+        return result
+
+    async def confirm_registration(self, confirmation_url: str) -> dict[str, Any]:
+        """Visit an email confirmation link to activate a registered account."""
+        if not confirmation_url.startswith("http"):
+            confirmation_url = f"{BASE_URL}{confirmation_url}"
+
+        resp = await self.page.goto(confirmation_url, wait_until="domcontentloaded", timeout=15_000)
+        await self.page.wait_for_timeout(3000)
+
+        url = self.page.url
+        txt = await self.text("#row-content")
+        low = txt.lower()
+
+        confirmed = any(kw in low for kw in
+                        ["confirmed", "activated", "success", "welcome",
+                         "подтверждён", "активирован"])
+        already = "already" in low or "уже" in low
+
+        s = await self.state()
 
         return {
-            "success": success,
+            "confirmed": confirmed or s.authenticated,
+            "already_confirmed": already,
+            "authenticated": s.authenticated,
             "url": url,
-            "errors": errors or None,
-            "page_text": txt[:500],
+            "status": resp.status if resp else 0,
+            "page_text": txt[:800],
         }
 
     # ── monitoring ────────────────────────────────────────────────────
