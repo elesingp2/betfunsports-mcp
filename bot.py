@@ -1,331 +1,506 @@
 #!/usr/bin/env python3
 """
-BFS Telegram Bot — async bot that drives betfunsports.com
-via headless Playwright. Thin wrapper over BrowserManager.
+BFS Telegram Bot + LLM — natural language browser agent.
+User writes in Telegram → LLM decides which browser tools to call →
+executes on headless Chrome → returns result + screenshot.
+
+LLM: DeepSeek Chat via OpenRouter ($0.30/1M input tokens)
+Browser: Playwright headless Chromium
 """
 
 import asyncio
-import io
 import base64
+import json
 import logging
 import sys
+import traceback
+from typing import Any
 
 sys.path.insert(0, "/workspace/bfs-mcp/src")
 
-from aiogram import Bot, Dispatcher, F, Router
+from aiogram import Bot, Dispatcher, Router
 from aiogram.types import Message, BufferedInputFile
 from aiogram.filters import Command
 from aiogram.enums import ParseMode
+from openai import AsyncOpenAI
 
 from bfs_mcp.browser import BrowserManager
 
-TOKEN = "8491424456:AAG0Rlgk6JoQrdefcSjRPX_jppRWns8naOY"
+# ── config ────────────────────────────────────────────────────────────
+
+TG_TOKEN = "8491424456:AAG0Rlgk6JoQrdefcSjRPX_jppRWns8naOY"
+OR_KEY = "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"
+MODEL = "deepseek/deepseek-chat"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("bfs-bot")
 
-bot = Bot(token=TOKEN)
+bot = Bot(token=TG_TOKEN)
 dp = Dispatcher()
 router = Router()
 dp.include_router(router)
 
 bm = BrowserManager()
 
+llm = AsyncOpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=OR_KEY,
+)
 
-# ── helpers ───────────────────────────────────────────────────────────
+conversations: dict[int, list[dict]] = {}
+MAX_HISTORY = 30
 
-async def ensure_browser():
+# ── tool definitions (OpenAI function calling format) ─────────────────
+
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_navigate",
+            "description": "Navigate to a URL. Use absolute URLs or relative paths like /football/prizecoupons1X2. Returns status, URL, title.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL or path to navigate to"}
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_get_text",
+            "description": "Get visible text from current page. Use selector '#row-content' for main content, 'body' for everything.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "selector": {"type": "string", "description": "CSS selector", "default": "#row-content"}
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_click",
+            "description": "Click an element by CSS selector.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "selector": {"type": "string"}
+                },
+                "required": ["selector"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_fill",
+            "description": "Fill a form input field.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "selector": {"type": "string", "description": "CSS selector of the input"},
+                    "value": {"type": "string", "description": "Value to fill"},
+                },
+                "required": ["selector", "value"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_select",
+            "description": "Select an option in a dropdown.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "selector": {"type": "string"},
+                    "value": {"type": "string"},
+                },
+                "required": ["selector", "value"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_screenshot",
+            "description": "Take a screenshot of current page. Call this when user wants to see the page or after important actions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "full_page": {"type": "boolean", "default": False}
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_eval",
+            "description": "Execute JavaScript in the page. Use for complex DOM queries, data extraction, or form manipulation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "javascript": {"type": "string"}
+                },
+                "required": ["javascript"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_forms",
+            "description": "List all forms on the current page with their fields, types, and visibility.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_links",
+            "description": "List links on current page with optional filter.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "filter_pattern": {"type": "string", "default": ""}
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "bfs_login",
+            "description": "Login to betfunsports.com. The site has anti-bot honeypot fields; this handles them.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "email": {"type": "string"},
+                    "password": {"type": "string"},
+                },
+                "required": ["email", "password"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "bfs_logout",
+            "description": "Logout from betfunsports.com.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "bfs_state",
+            "description": "Get current state: URL, title, auth status, username, EUR/BFS balance.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "bfs_list_sports",
+            "description": "List all available sports and coupons from the homepage.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "bfs_view_coupon",
+            "description": "View coupon page details: tables, forms, match info.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "e.g. /football/prizecoupons1X2"}
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_wait",
+            "description": "Wait N milliseconds. Useful after clicks or navigation for dynamic content.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ms": {"type": "integer", "default": 2000}
+                },
+            },
+        },
+    },
+]
+
+SYSTEM_PROMPT = """Ты — AI-агент, управляющий сайтом betfunsports.com через headless браузер.
+У тебя есть набор инструментов для навигации, кликов, заполнения форм, скриншотов и т.д.
+
+Сайт betfunsports.com — спортивный прогнозный клуб (P2P ставки на спорт).
+Виды спорта: футбол, теннис, хоккей, баскетбол, биатлон, F1, волейбол, бокс, MMA.
+
+Правила:
+- Отвечай на русском
+- Будь кратким и полезным
+- После важных действий (навигация, клик, логин) делай скриншот
+- Если пользователь просит что-то посмотреть — сначала навигируй, потом извлеки текст и/или сделай скриншот
+- Для логина используй bfs_login (он обходит honeypot-защиту)
+- Если нужно заполнить форму — сначала вызови browser_forms чтобы увидеть поля
+- Можешь вызывать несколько инструментов последовательно
+- Страница регистрации: /fullRegistration
+- Формат даты рождения: DD/MM/YYYY
+- В форме регистрации видимые поля: oldUame (username), oail (email), password0 (пароль), password2 (подтверждение), firstName, lastName, fbirthDate, phone, countryCode (select), sex (radio)
+- Скрытые honeypot поля (username, email, password) заполняются автоматически JS перед сабмитом"""
+
+
+# ── tool execution ────────────────────────────────────────────────────
+
+async def execute_tool(name: str, args: dict) -> tuple[str, bytes | None]:
+    """Execute a tool, return (text_result, optional_screenshot_bytes)."""
     await bm.start()
+    screenshot_bytes = None
+
+    if name == "browser_navigate":
+        r = await bm.goto(args["url"])
+        return json.dumps(r, ensure_ascii=False), None
+
+    elif name == "browser_get_text":
+        sel = args.get("selector", "#row-content")
+        text = await bm.get_text(sel)
+        return text[:4000], None
+
+    elif name == "browser_click":
+        r = await bm.click(args["selector"], force=True)
+        return r, None
+
+    elif name == "browser_fill":
+        r = await bm.fill(args["selector"], args["value"], force=True)
+        return r, None
+
+    elif name == "browser_select":
+        r = await bm.select(args["selector"], args["value"])
+        return r, None
+
+    elif name == "browser_screenshot":
+        full = args.get("full_page", False)
+        b64 = await bm.screenshot(full_page=full)
+        screenshot_bytes = base64.b64decode(b64)
+        return "[screenshot taken]", screenshot_bytes
+
+    elif name == "browser_eval":
+        r = await bm.evaluate(args["javascript"])
+        return json.dumps(r, ensure_ascii=False, default=str)[:4000], None
+
+    elif name == "browser_forms":
+        r = await bm.evaluate("""() => {
+            return Array.from(document.forms).map(f => ({
+                id: f.id || '(unnamed)',
+                action: f.action,
+                method: f.method,
+                fields: Array.from(f.elements).filter(e => e.name).map(e => ({
+                    name: e.name, type: e.type,
+                    value: (e.value||'').substring(0,50),
+                    visible: e.offsetParent !== null,
+                    options: e.tagName==='SELECT' ? Array.from(e.options).slice(0,5).map(o=>o.value) : undefined
+                }))
+            })).filter(f => f.fields.length > 0);
+        }""")
+        return json.dumps(r, ensure_ascii=False)[:4000], None
+
+    elif name == "browser_links":
+        pattern = args.get("filter_pattern", "")
+        r = await bm.evaluate(f"""() => {{
+            const p = "{pattern}";
+            return Array.from(document.querySelectorAll('a[href]'))
+                .map(a => ({{href: a.getAttribute('href'), text: a.textContent.trim().replace(/\\s+/g,' ').substring(0,60)}}))
+                .filter(l => l.href && !l.href.startsWith('/static') && (!p || l.href.includes(p)))
+                .filter((v,i,a) => a.findIndex(x => x.href===v.href)===i).slice(0,30);
+        }}""")
+        return json.dumps(r, ensure_ascii=False)[:4000], None
+
+    elif name == "bfs_login":
+        state = await bm.login(args["email"], args["password"])
+        r = {
+            "authenticated": state.is_authenticated,
+            "username": state.username,
+            "balance_eur": state.balance_eur,
+            "balance_bfs": state.balance_bfs,
+        }
+        return json.dumps(r, ensure_ascii=False), None
+
+    elif name == "bfs_logout":
+        r = await bm.logout()
+        return json.dumps(r, ensure_ascii=False), None
+
+    elif name == "bfs_state":
+        s = await bm.get_state()
+        r = {
+            "url": s.url, "title": s.title,
+            "authenticated": s.is_authenticated,
+            "username": s.username,
+            "balance_eur": s.balance_eur,
+            "balance_bfs": s.balance_bfs,
+            "in_game": s.in_game,
+        }
+        return json.dumps(r, ensure_ascii=False), None
+
+    elif name == "bfs_list_sports":
+        sports = await bm.list_sports()
+        return json.dumps(sports, ensure_ascii=False)[:4000], None
+
+    elif name == "bfs_view_coupon":
+        details = await bm.get_coupon_details(args["path"])
+        return json.dumps(details, ensure_ascii=False)[:4000], None
+
+    elif name == "browser_wait":
+        ms = args.get("ms", 2000)
+        await bm.wait(ms)
+        return f"Waited {ms}ms", None
+
+    return f"Unknown tool: {name}", None
 
 
-async def send_screenshot(msg: Message, full: bool = False):
-    await ensure_browser()
-    b64 = await bm.screenshot(full_page=full)
-    img = base64.b64decode(b64)
-    photo = BufferedInputFile(img, filename="screenshot.png")
-    await msg.answer_photo(photo)
+# ── LLM agent loop ───────────────────────────────────────────────────
 
+async def agent_respond(chat_id: int, user_text: str, msg: Message) -> None:
+    """Full agent loop: user msg → LLM → tool calls → LLM → response."""
+    if chat_id not in conversations:
+        conversations[chat_id] = []
 
-def esc(text: str) -> str:
-    """Escape MarkdownV2 special chars."""
-    for ch in r"_*[]()~`>#+-=|{}.!":
-        text = text.replace(ch, f"\\{ch}")
-    return text
+    history = conversations[chat_id]
+    history.append({"role": "user", "content": user_text})
 
+    if len(history) > MAX_HISTORY:
+        history[:] = history[-MAX_HISTORY:]
 
-# ── commands ──────────────────────────────────────────────────────────
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history
 
-@router.message(Command("start", "help"))
-async def cmd_help(msg: Message):
-    await msg.answer(
-        "<b>BFS Browser Bot</b>\n\n"
-        "<b>Auth:</b>\n"
-        "/login email password — войти\n"
-        "/logout — выйти\n"
-        "/state — статус: URL, auth, баланс\n\n"
-        "<b>BFS:</b>\n"
-        "/balance — баланс EUR + BFS\n"
-        "/sports — список видов спорта/купонов\n"
-        "/coupon path — детали купона\n"
-        "/profile — профиль\n"
-        "/payment — платёжные методы\n\n"
-        "<b>Browser:</b>\n"
-        "/go url — навигация\n"
-        "/text [selector] — текст страницы\n"
-        "/html [selector] — HTML\n"
-        "/screen — скриншот\n"
-        "/fullscreen — полный скриншот\n"
-        "/click selector — клик\n"
-        "/fill selector | value — заполнить поле\n"
-        "/js код — выполнить JavaScript\n"
-        "/forms — формы на странице\n"
-        "/links [фильтр] — ссылки",
-        parse_mode=ParseMode.HTML,
-    )
+    pending_screenshots: list[bytes] = []
+    max_iterations = 8
 
+    thinking_msg = await msg.answer("🤔 Думаю...")
 
-@router.message(Command("login"))
-async def cmd_login(msg: Message):
-    parts = msg.text.split(maxsplit=2)
-    if len(parts) < 3:
-        await msg.answer("Формат: /login email password")
-        return
-    email, password = parts[1], parts[2]
-    await ensure_browser()
-    status = await msg.answer("⏳ Логинюсь...")
-    state = await bm.login(email, password)
-    if state.is_authenticated:
-        await status.edit_text(
-            f"✅ Залогинен: <b>{state.username}</b>\n"
-            f"💶 {state.balance_eur} EUR | 🎮 BFS {state.balance_bfs}\n"
-            f"🎯 In game: {state.in_game} EUR",
-            parse_mode=ParseMode.HTML,
-        )
+    for iteration in range(max_iterations):
+        try:
+            response = await llm.chat.completions.create(
+                model=MODEL,
+                messages=messages,
+                tools=TOOLS,
+                tool_choice="auto",
+                max_tokens=1024,
+                temperature=0.3,
+            )
+        except Exception as e:
+            log.error("LLM error: %s", e)
+            await thinking_msg.edit_text(f"Ошибка LLM: {e}")
+            return
+
+        choice = response.choices[0]
+        assistant_msg = choice.message
+
+        messages.append(assistant_msg.model_dump(exclude_none=True))
+
+        if not assistant_msg.tool_calls:
+            final_text = assistant_msg.content or "(нет ответа)"
+            history.append({"role": "assistant", "content": final_text})
+            break
+
+        for tc in assistant_msg.tool_calls:
+            fn_name = tc.function.name
+            try:
+                fn_args = json.loads(tc.function.arguments)
+            except json.JSONDecodeError:
+                fn_args = {}
+
+            log.info("Tool call: %s(%s)", fn_name, json.dumps(fn_args, ensure_ascii=False)[:200])
+
+            try:
+                result_text, screenshot = await execute_tool(fn_name, fn_args)
+                if screenshot:
+                    pending_screenshots.append(screenshot)
+            except Exception as e:
+                result_text = f"Error: {e}"
+                log.error("Tool error: %s", traceback.format_exc())
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": result_text[:4000],
+            })
+
+        await thinking_msg.edit_text(f"🔧 Выполняю ({iteration + 1}/{max_iterations})...")
     else:
-        await status.edit_text("❌ Не удалось войти. Возможно, сессия уже активна в браузере.")
-    await send_screenshot(msg)
+        final_text = "Достигнут лимит итераций. Вот что удалось сделать."
+        history.append({"role": "assistant", "content": final_text})
+
+    try:
+        await thinking_msg.edit_text(final_text[:4096])
+    except Exception:
+        for chunk_start in range(0, len(final_text), 4096):
+            await msg.answer(final_text[chunk_start : chunk_start + 4096])
+
+    for ss in pending_screenshots:
+        try:
+            photo = BufferedInputFile(ss, filename="screenshot.png")
+            await msg.answer_photo(photo)
+        except Exception as e:
+            log.error("Screenshot send error: %s", e)
 
 
-@router.message(Command("logout"))
-async def cmd_logout(msg: Message):
-    await ensure_browser()
-    result = await bm.logout()
-    await msg.answer(f"Вышел. URL: {result['url']}")
+# ── handlers ──────────────────────────────────────────────────────────
 
-
-@router.message(Command("state"))
-async def cmd_state(msg: Message):
-    await ensure_browser()
-    s = await bm.get_state()
-    auth = "✅ да" if s.is_authenticated else "❌ нет"
+@router.message(Command("start"))
+async def cmd_start(msg: Message):
     await msg.answer(
-        f"<b>Состояние</b>\n"
-        f"URL: {esc(s.url)}\n"
-        f"Title: {esc(s.title)}\n"
-        f"Auth: {auth}\n"
-        f"User: {s.username or '—'}\n"
-        f"EUR: {s.balance_eur or '—'}\n"
-        f"BFS: {s.balance_bfs or '—'}\n"
-        f"In game: {s.in_game or '—'}",
-        parse_mode=ParseMode.HTML,
+        "👋 Я — AI-агент для betfunsports.com\n\n"
+        "Пиши на естественном языке, я управляю сайтом через headless браузер.\n\n"
+        "Примеры:\n"
+        "• «Покажи главную страницу»\n"
+        "• «Залогинься как user@mail.com пароль123»\n"
+        "• «Какие виды спорта есть?»\n"
+        "• «Открой футбольные купоны»\n"
+        "• «Покажи баланс»\n"
+        "• «Сделай скриншот»\n\n"
+        "/clear — очистить историю диалога\n"
+        "/screen — быстрый скриншот",
     )
 
 
-@router.message(Command("balance"))
-async def cmd_balance(msg: Message):
-    await ensure_browser()
-    await bm.goto("/")
-    s = await bm.get_state()
-    if not s.is_authenticated:
-        await msg.answer("Не залогинен. Используй /login email password")
-        return
-    await msg.answer(
-        f"👤 {s.username}\n💶 {s.balance_eur} EUR\n🎮 {s.balance_bfs} BFS\n🎯 In game: {s.in_game} EUR",
-    )
-
-
-@router.message(Command("sports"))
-async def cmd_sports(msg: Message):
-    await ensure_browser()
-    status = await msg.answer("⏳ Загружаю...")
-    sports = await bm.list_sports()
-    lines = [f"<b>Спорт / купоны ({len(sports)}):</b>"]
-    for s in sports[:30]:
-        lines.append(f"• <code>{s['path']}</code> — {esc(s['label'][:60])}")
-    await status.edit_text("\n".join(lines), parse_mode=ParseMode.HTML)
-
-
-@router.message(Command("coupon"))
-async def cmd_coupon(msg: Message):
-    parts = msg.text.split(maxsplit=1)
-    if len(parts) < 2:
-        await msg.answer("Формат: /coupon /football/prizecoupons1X2")
-        return
-    await ensure_browser()
-    status = await msg.answer("⏳ Загружаю купон...")
-    details = await bm.get_coupon_details(parts[1])
-    text = details.get("text", "")[:3000]
-    title = details.get("title", "")
-    forms_count = len(details.get("forms", []))
-    tables_count = len(details.get("tables", []))
-    await status.edit_text(
-        f"<b>{esc(title)}</b>\n"
-        f"Forms: {forms_count} | Tables: {tables_count}\n\n"
-        f"{esc(text[:2000])}",
-        parse_mode=ParseMode.HTML,
-    )
-    await send_screenshot(msg)
-
-
-@router.message(Command("profile"))
-async def cmd_profile(msg: Message):
-    await ensure_browser()
-    nav = await bm.goto("/profile")
-    text = await bm.get_text("#row-content")
-    await msg.answer(f"<b>{esc(nav['title'])}</b>\n\n{esc(text[:3000])}", parse_mode=ParseMode.HTML)
-
-
-@router.message(Command("payment"))
-async def cmd_payment(msg: Message):
-    await ensure_browser()
-    nav = await bm.goto("/paymentmethods")
-    text = await bm.get_text("#row-content")
-    await msg.answer(f"<b>{esc(nav['title'])}</b>\n\n{esc(text[:3000])}", parse_mode=ParseMode.HTML)
-
-
-@router.message(Command("go"))
-async def cmd_go(msg: Message):
-    parts = msg.text.split(maxsplit=1)
-    if len(parts) < 2:
-        await msg.answer("Формат: /go /football/prizecoupons1X2")
-        return
-    await ensure_browser()
-    result = await bm.goto(parts[1])
-    await msg.answer(f"→ {result['status']} {result['title']}\n{result['url']}")
-    await send_screenshot(msg)
-
-
-@router.message(Command("text"))
-async def cmd_text(msg: Message):
-    parts = msg.text.split(maxsplit=1)
-    selector = parts[1] if len(parts) > 1 else "#row-content"
-    await ensure_browser()
-    text = await bm.get_text(selector)
-    await msg.answer(text[:4000] or "(пусто)")
-
-
-@router.message(Command("html"))
-async def cmd_html(msg: Message):
-    parts = msg.text.split(maxsplit=1)
-    selector = parts[1] if len(parts) > 1 else "#row-content"
-    await ensure_browser()
-    html = await bm.get_html(selector)
-    await msg.answer(f"<code>{esc(html[:3500])}</code>", parse_mode=ParseMode.HTML)
+@router.message(Command("clear"))
+async def cmd_clear(msg: Message):
+    conversations.pop(msg.chat.id, None)
+    await msg.answer("История очищена.")
 
 
 @router.message(Command("screen"))
 async def cmd_screen(msg: Message):
-    await ensure_browser()
-    await send_screenshot(msg)
+    await bm.start()
+    b64 = await bm.screenshot()
+    photo = BufferedInputFile(base64.b64decode(b64), filename="screen.png")
+    await msg.answer_photo(photo)
 
-
-@router.message(Command("fullscreen"))
-async def cmd_fullscreen(msg: Message):
-    await ensure_browser()
-    await send_screenshot(msg, full=True)
-
-
-@router.message(Command("click"))
-async def cmd_click(msg: Message):
-    parts = msg.text.split(maxsplit=1)
-    if len(parts) < 2:
-        await msg.answer("Формат: /click CSS_SELECTOR")
-        return
-    await ensure_browser()
-    result = await bm.click(parts[1], force=True)
-    await msg.answer(result)
-    await send_screenshot(msg)
-
-
-@router.message(Command("fill"))
-async def cmd_fill(msg: Message):
-    parts = msg.text.split(maxsplit=1)
-    if len(parts) < 2 or "|" not in parts[1]:
-        await msg.answer("Формат: /fill CSS_SELECTOR | значение")
-        return
-    selector, value = parts[1].split("|", 1)
-    await ensure_browser()
-    result = await bm.fill(selector.strip(), value.strip(), force=True)
-    await msg.answer(result)
-
-
-@router.message(Command("js"))
-async def cmd_js(msg: Message):
-    parts = msg.text.split(maxsplit=1)
-    if len(parts) < 2:
-        await msg.answer("Формат: /js document.title")
-        return
-    await ensure_browser()
-    try:
-        result = await bm.evaluate(parts[1])
-        text = str(result)
-        await msg.answer(f"<code>{esc(text[:3500])}</code>", parse_mode=ParseMode.HTML)
-    except Exception as e:
-        await msg.answer(f"JS Error: {e}")
-
-
-@router.message(Command("forms"))
-async def cmd_forms(msg: Message):
-    await ensure_browser()
-    forms = await bm.evaluate("""() => {
-        return Array.from(document.forms).map(f => ({
-            id: f.id || '(no id)',
-            action: f.action,
-            method: f.method,
-            fields: Array.from(f.elements).filter(e => e.name).map(e =>
-                e.name + ':' + e.type + (e.offsetParent ? '' : ' [hidden]')
-            ).join(', ')
-        })).filter(f => f.fields);
-    }""")
-    lines = [f"<b>Формы ({len(forms)}):</b>"]
-    for f in forms[:10]:
-        lines.append(f"\n<b>{esc(f['id'])}</b> → {esc(f['action'][:60])}")
-        lines.append(f"<code>{esc(f['fields'][:200])}</code>")
-    await msg.answer("\n".join(lines), parse_mode=ParseMode.HTML)
-
-
-@router.message(Command("links"))
-async def cmd_links(msg: Message):
-    parts = msg.text.split(maxsplit=1)
-    pattern = parts[1] if len(parts) > 1 else ""
-    await ensure_browser()
-    links = await bm.evaluate(f"""() => {{
-        const p = "{pattern}";
-        return Array.from(document.querySelectorAll('a[href]'))
-            .map(a => ({{h: a.getAttribute('href'), t: a.textContent.trim().replace(/\\s+/g,' ').substring(0,60)}}))
-            .filter(l => l.h && l.h.startsWith('/') && !l.h.startsWith('/static') && (!p || l.h.includes(p)))
-            .filter((v,i,a) => a.findIndex(x => x.h===v.h)===i).slice(0,30);
-    }}""")
-    lines = [f"<b>Ссылки ({len(links)}):</b>"]
-    for l in links:
-        lines.append(f"• <code>{l['h']}</code> — {esc(l['t'][:50])}")
-    await msg.answer("\n".join(lines), parse_mode=ParseMode.HTML)
-
-
-# ── fallback ──────────────────────────────────────────────────────────
 
 @router.message()
-async def fallback(msg: Message):
-    await msg.answer("Неизвестная команда. /help для списка.")
+async def handle_message(msg: Message):
+    if not msg.text:
+        return
+    await agent_respond(msg.chat.id, msg.text, msg)
 
 
 # ── main ──────────────────────────────────────────────────────────────
 
 async def main():
-    log.info("Starting BFS Telegram Bot...")
-    await ensure_browser()
+    log.info("Starting BFS AI Bot (model=%s)...", MODEL)
+    await bm.start()
     await bm.goto("/")
-    log.info("Browser ready, starting polling...")
+    log.info("Browser ready, polling...")
     try:
         await dp.start_polling(bot)
     finally:
