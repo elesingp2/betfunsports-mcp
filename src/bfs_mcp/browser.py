@@ -285,3 +285,40 @@ class BFSBrowser:
                 .filter(l=>l.href&&!l.href.startsWith('/static')&&(!p||l.href.includes(p)))
                 .filter((v,i,a)=>a.findIndex(x=>x.href===v.href)===i).slice(0,50);
         }}""")
+
+    async def bet_history(self) -> dict[str, Any]:
+        """Scrape bet history table and return as structured data + CSV."""
+        await self.goto("/user/bets/archive")
+        await self.page.wait_for_timeout(3000)
+
+        data = await self.page.evaluate("""() => {
+            const table = document.querySelector('#row-content table, .dataTable, table');
+            if (!table) return {rows: [], csv: '', error: 'no table found'};
+            const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
+            const rows = [];
+            table.querySelectorAll('tbody tr').forEach(tr => {
+                const cells = Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim().replace(/\\s+/g, ' '));
+                if (cells.length && cells.some(c => c)) rows.push(cells);
+            });
+            let csv = headers.join(',') + '\\n';
+            rows.forEach(r => csv += r.map(c => '"' + c.replace(/"/g, '""') + '"').join(',') + '\\n');
+            return {headers, rows, csv, count: rows.length};
+        }""")
+        return data
+
+    async def account_info(self) -> dict[str, Any]:
+        """Get full account details."""
+        await self.goto("/user/details")
+        await self.page.wait_for_timeout(2000)
+        return await self.page.evaluate("""() => {
+            const c = document.querySelector('#row-content');
+            if (!c) return {error: 'no content'};
+            const text = c.textContent.replace(/\\s+/g, ' ').trim();
+            const pairs = {};
+            c.querySelectorAll('label, .label, dt').forEach(el => {
+                const key = el.textContent.trim().replace(/:$/, '');
+                const val = el.nextElementSibling?.textContent?.trim() || '';
+                if (key && val) pairs[key] = val;
+            });
+            return {text: text.substring(0, 1500), fields: pairs};
+        }""")

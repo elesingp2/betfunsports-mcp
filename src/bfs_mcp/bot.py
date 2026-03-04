@@ -44,108 +44,78 @@ def _td(name: str, desc: str, props: dict[str, Any] | None = None, req: list[str
 
 
 TOOLS = [
-    _td("bfs_login",
-        "Login to betfunsports.com. Handles honeypot fields automatically. Returns auth state, username, EUR and BFS balances.",
+    _td("bfs_login", "Authenticate with betfunsports.com. Returns username, EUR and BFS balances.",
         {"email": "string", "password": "string"}, ["email", "password"]),
-    _td("bfs_logout",
-        "Logout from betfunsports.com and clear session cookies."),
-    _td("bfs_state",
-        "Get current page state: URL, page title, whether user is authenticated, username, EUR balance, BFS balance, in-game amount. "
-        "ALWAYS call this first to check if user is logged in."),
-    _td("bfs_list_sports",
-        "Navigate to homepage and list all available sports and coupons. Returns array of {path, label}. "
-        "Example paths: /football/prizecoupons1X2, /hockey/kHLRegular, /tennis/atpGenevaOpen."),
-    _td("bfs_bet_info",
-        "Navigate to a coupon page and parse it into structured betting info. Returns: couponId, events (with eventId and outcome options), "
-        "rooms (Wooden/Bronze/Silver/Golden with roomId, stakes, submit selectors), and page text. ALWAYS call this before placing a bet.",
+    _td("bfs_logout", "End session."),
+    _td("bfs_state", "Check auth status + current balances (EUR, BFS, in-game). ALWAYS call first."),
+    _td("bfs_list_sports", "List all available sports coupons. Returns [{path, label}]."),
+    _td("bfs_bet_info", "Get coupon details: events, outcomes, rooms, stakes. ALWAYS call before betting.",
         {"path": {"type": "string", "description": "Coupon path, e.g. /FOOTBALL/spainPrimeraDivision/18638"}}, ["path"]),
     _td("bfs_place_bet",
-        "Place a bet on a coupon. Requires login. Selects outcomes, sets stake, submits form. Returns success status and page text after submission.",
-        {"coupon_path": {"type": "string", "description": "Full coupon path from bfs_bet_info"},
-         "selections": {"type": "object", "description": "Map {eventId: outcomeCode}. For 1X2: '8'=home win(1), '9'=draw(X), '10'=away win(2)",
-                        "additionalProperties": {"type": "string"}},
-         "room_index": {"type": "integer", "description": "0=Wooden(BFS,free), 1=Bronze(1-5 EUR), 2=Silver(10-50 EUR), 3=Golden(100-500 EUR)", "default": 0},
-         "stake": {"type": "string", "description": "Bet amount as string. If empty, uses room default."}},
+        "Place a bet. selections={eventId: outcomeCode}. 1X2: '8'=home, '9'=draw, '10'=away. "
+        "Rooms: 0=Wooden(BFS free) 1=Bronze(1-5€) 2=Silver(10-50€) 3=Golden(100-500€).",
+        {"coupon_path": "string",
+         "selections": {"type": "object", "additionalProperties": {"type": "string"}},
+         "room_index": {"type": "integer", "default": 0},
+         "stake": {"type": "string", "default": ""}},
         ["coupon_path", "selections"]),
-    _td("browser_navigate",
-        "Navigate to any URL or relative path on betfunsports.com. Returns HTTP status, final URL, page title.",
+    _td("bfs_bet_history", "Export bet history as CSV (ID, Coupon, Date, Stake, Points, Winning). Use for analysis."),
+    _td("bfs_account", "Get account details: name, email, registration info."),
+    _td("bfs_payment_methods", "View deposit/withdrawal methods with fees and limits."),
+    _td("page_open", "Open a page by URL or path.",
         {"url": "string"}, ["url"]),
-    _td("browser_text",
-        "Extract visible text from current page by CSS selector. Use '#row-content' for main content, 'body' for full page.",
+    _td("page_read", "Read text content from current page.",
         {"selector": {"type": "string", "default": "#row-content"}}),
-    _td("browser_click",
-        "Click a page element by CSS selector. Force-clicks even hidden elements.",
-        {"selector": "string"}, ["selector"]),
-    _td("browser_fill",
-        "Fill a form input by CSS selector.",
-        {"selector": "string", "value": "string"}, ["selector", "value"]),
-    _td("browser_select",
-        "Select an option in a <select> dropdown by value.",
-        {"selector": "string", "value": "string"}, ["selector", "value"]),
-    _td("browser_screenshot",
-        "Take a PNG screenshot of the current page. Call after navigation, login, or bet placement to show user the result.",
+    _td("page_click", "Click an element.", {"selector": "string"}, ["selector"]),
+    _td("page_fill", "Fill a form field.", {"selector": "string", "value": "string"}, ["selector", "value"]),
+    _td("page_select", "Select dropdown option.", {"selector": "string", "value": "string"}, ["selector", "value"]),
+    _td("page_screenshot", "Take a visual snapshot. Call after important actions.",
         {"full_page": {"type": "boolean", "default": False}}),
-    _td("browser_eval",
-        "Execute arbitrary JavaScript in the page context and return the result. Use for complex DOM queries or data extraction.",
+    _td("page_script", "Run a script for advanced data extraction.",
         {"javascript": "string"}, ["javascript"]),
-    _td("browser_forms",
-        "List all HTML forms on the current page with field names, types, values, and visibility. Useful to understand page structure before interaction."),
-    _td("browser_links",
-        "List all links on the current page. Optional substring filter on href.",
+    _td("page_forms", "List all interactive forms with fields."),
+    _td("page_links", "List page links with optional filter.",
         {"filter_pattern": {"type": "string", "default": ""}}),
-    _td("browser_wait",
-        "Wait N milliseconds for dynamic content to load.",
-        {"ms": {"type": "integer", "default": 2000}}),
 ]
 
-SYSTEM = """Ты — AI-агент, управляющий сайтом betfunsports.com через headless-браузер Playwright.
-Ты ОБЯЗАН использовать доступные tool calls для взаимодействия с сайтом. НЕ ВЫДУМЫВАЙ что инструменты недоступны — они все работают.
+SYSTEM = """Ты — AI-агент платформы Betfunsports. У тебя есть полный набор API-инструментов для работы с платформой.
+Ты ОБЯЗАН вызывать tool calls. ВСЕ инструменты рабочие. НИКОГДА не говори что они недоступны.
+Отвечай на русском, кратко.
 
-## О системе Betfunsports (TOTUP)
+## Betfunsports (TOTUP система)
+P2P платформа спортивных прогнозов. Ставки формируют призовой пул, который ПОЛНОСТЬЮ распределяется между победителями.
+- 50% ставок выигрывают (ранжирование по точности 0-100 баллов)
+- Выигрыш = точность × размер ставки (мин. коэффициент 1.3)
+- Ставки с 100 баллов ВСЕГДА выигрывают
 
-Betfunsports — P2P система спортивных прогнозов. Ставки игроков формируют призовой пул, который полностью распределяется между победителями.
+## Столы
+- Wooden (0) — BFS (бесплатно), 1-10 BFS, 0% комиссии
+- Bronze (1) — EUR, 1-5€, 10%
+- Silver (2) — EUR, 10-50€, 7.5%
+- Golden (3) — EUR, 100-500€, 5%
 
-**Ключевые правила:**
-- 50% ставок выигрывают (по точности прогноза)
-- Точность прогноза оценивается от 0 до 100 баллов
-- Выигрыш пропорционален точности × размеру ставки
-- Минимальный коэффициент выигрыша: 1.3
+## Спорт
+Футбол, теннис, хоккей, баскетбол, F1, биатлон, волейбол, бокс, MMA.
+1X2 коды: "8"=1(дом), "9"=X(ничья), "10"=2(гость)
 
-**4 стола (rooms):**
-- Wooden (index=0) — BFS (виртуальная валюта, бесплатно), 1-10 BFS
-- Bronze (index=1) — 1-5 EUR, комиссия 10%
-- Silver (index=2) — 10-50 EUR, комиссия 7.5%
-- Golden (index=3) — 100-500 EUR, комиссия 5%
+## Обязательный порядок ставки
+1. bfs_state → проверить auth
+2. bfs_login → если надо
+3. bfs_list_sports → найти купон
+4. bfs_bet_info(path) → ОБЯЗАТЕЛЬНО! Получить eventId + rooms
+5. bfs_place_bet → разместить
+6. page_screenshot → показать результат
 
-**Виды спорта:** футбол, теннис, хоккей, баскетбол, F1, биатлон, волейбол, бокс, MMA.
+## Анализ
+- bfs_bet_history → CSV с историей ставок (ID, купон, дата, ставка, баллы, выигрыш)
+- Используй для анализа точности и улучшения стратегии
 
-**Типы купонов:**
-- 1X2 — исход матча (коды: 8=1 домашняя победа, 9=X ничья, 10=2 гостевая победа)
-- Score — точный счёт
-- GD (Goal Difference) — разница мячей
-- Match Winner, Playoff outcome, и другие
-
-**Ранжирование:** точность → размер ставки → время ставки. Ставки с 100 баллов всегда выигрывают.
-
-## Как делать ставку (ОБЯЗАТЕЛЬНЫЙ порядок)
-
-1. `bfs_state` — проверить залогинен ли пользователь
-2. Если не залогинен — `bfs_login(email, password)`
-3. `bfs_list_sports` — показать доступные купоны
-4. `bfs_bet_info(path)` — ОБЯЗАТЕЛЬНО перед ставкой! Получить eventId, outcomes, rooms
-5. Показать пользователю: матчи, варианты, столы, минимальные ставки
-6. `bfs_place_bet(coupon_path, selections, room_index, stake)` — разместить ставку
-7. `browser_screenshot` — показать результат
-
-## Правила агента
-
-- Отвечай на русском, кратко и по делу
-- ВСЕГДА используй tool calls — они 100% рабочие
-- НИКОГДА не говори что инструменты недоступны
-- После важных действий делай browser_screenshot
-- Для начинающих рекомендуй Wooden стол (бесплатные BFS)
+## Правила
+- ВСЕГДА используй tool calls
+- Новичкам рекомендуй Wooden (бесплатно)
+- Для заработка — Silver/Golden (после анализа истории)
 - Показывай баланс после ставки
-- Если купон закрыт — предложи другой"""
+- Закрытый купон → предложи другой"""
 
 
 async def _exec(name: str, args: dict) -> tuple[str, bytes | None]:
@@ -167,27 +137,31 @@ async def _exec(name: str, args: dict) -> tuple[str, bytes | None]:
             r = await bm.place_bet(args["coupon_path"], args["selections"],
                                    args.get("room_index", 0), args.get("stake") or None)
             return j(r)[:4000], await bm.screenshot_bytes()
-        case "browser_navigate":
+        case "bfs_bet_history":
+            return j(await bm.bet_history())[:4000], None
+        case "bfs_account":
+            return j(await bm.account_info())[:4000], None
+        case "bfs_payment_methods":
+            await bm.goto("/paymentmethods")
+            return (await bm.text("#row-content"))[:4000], None
+        case "page_open":
             return j(await bm.goto(args["url"])), None
-        case "browser_text":
+        case "page_read":
             return (await bm.text(args.get("selector", "#row-content")))[:4000], None
-        case "browser_click":
+        case "page_click":
             return await bm.click(args["selector"], force=True), None
-        case "browser_fill":
+        case "page_fill":
             return await bm.fill(args["selector"], args["value"], force=True), None
-        case "browser_select":
+        case "page_select":
             return await bm.select(args["selector"], args["value"]), None
-        case "browser_screenshot":
-            return "[screenshot taken]", await bm.screenshot_bytes(args.get("full_page", False))
-        case "browser_eval":
+        case "page_screenshot":
+            return "[snapshot taken]", await bm.screenshot_bytes(args.get("full_page", False))
+        case "page_script":
             return j(await bm.evaluate(args["javascript"]))[:4000], None
-        case "browser_forms":
+        case "page_forms":
             return j(await bm.forms())[:4000], None
-        case "browser_links":
+        case "page_links":
             return j(await bm.links(args.get("filter_pattern", "")))[:4000], None
-        case "browser_wait":
-            await bm.wait(args.get("ms", 2000))
-            return "ok", None
         case _:
             return f"unknown tool: {name}", None
 

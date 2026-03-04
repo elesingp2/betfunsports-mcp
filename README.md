@@ -1,138 +1,125 @@
 # bfs-mcp
 
-MCP server + Telegram bot for [betfunsports.com](https://betfunsports.com) — headless browser bridge, no API needed.
+Platform API for [betfunsports.com](https://betfunsports.com) — lets AI agents autonomously browse sports events, place bets, and earn money.
 
-An AI agent controls the real website through Playwright, enabling login, browsing sports, and placing bets via natural language.
+Works as an MCP server (Claude, Cursor, OpenClaw, any MCP client) and as a standalone Telegram bot.
 
-## Quick start
-
-### Install
+## Install
 
 ```bash
 pip install git+https://github.com/elesingp2/bfs-knowledge.git#subdirectory=bfs-mcp
 playwright install chromium
 ```
 
-### MCP Server (for Claude / Cursor)
+## MCP Server
 
 ```bash
 bfs-mcp
 ```
 
-No config needed — runs on stdio. Add to Claude Desktop (`claude_desktop_config.json`):
+Runs on stdio. Add to **Claude Desktop** (`claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
-    "bfs-browser": {
+    "bfs": {
       "command": "bfs-mcp"
     }
   }
 }
 ```
 
-Or Cursor (Settings → MCP → Add):
-
+**Cursor** (Settings → MCP → Add):
 ```json
 {
   "mcpServers": {
-    "bfs-browser": {
+    "bfs": {
       "command": "bfs-mcp"
     }
   }
 }
 ```
 
-The agent will see 17 tools and a detailed instruction about the Betfunsports system. See [`skill.md`](skill.md) for the full skill description.
+The agent gets 19 tools + full platform instructions. See [`skill.md`](skill.md) for the autonomous earning guide.
 
-### Telegram Bot
+## Telegram Bot
 
 ```bash
 pip install "bfs-mcp[bot]"
-playwright install chromium
 
-export BFS_TG_TOKEN=your_telegram_bot_token
-export BFS_LLM_KEY=your_openrouter_key
-export BFS_LLM_MODEL=deepseek/deepseek-chat   # ~$0.0002/request
+export BFS_TG_TOKEN=...                          # Telegram bot token
+export BFS_LLM_KEY=...                           # OpenRouter API key
+export BFS_LLM_MODEL=deepseek/deepseek-chat      # ~$0.0002/request
 
 bfs-bot
 ```
 
-Write to the bot in natural language:
-- "Залогинься как user@mail.com password123"
-- "Какие купоны есть в футболе?"
-- "Поставь на победу хозяев на Wooden столе"
-- "Покажи баланс"
-
-## Architecture
-
-```
-src/bfs_mcp/
-├── browser.py   ← shared core: Playwright, auth, betting, DOM (~190 lines)
-├── server.py    ← MCP server: 17 tools, stdio (~140 lines)
-└── bot.py       ← Telegram bot: LLM agent, independent (~190 lines)
-```
-
-Both `server.py` and `bot.py` import `BFSBrowser` from `browser.py`. No code duplication.
+Write naturally: "залогинься", "покажи купоны", "поставь на победу хозяев на Silver столе".
 
 ## How Betfunsports works
 
-P2P sports prediction platform. Player bets form a prize pool that is **fully distributed** among winners.
+P2P sports prediction platform. Player bets form a prize pool — **fully distributed** among winners.
 
-- **50% of bets win** (ranked by forecast accuracy, 0-100 points)
-- Winnings proportional to **accuracy × bet size**
-- Minimum winning coefficient: **1.3**
+| | |
+|-|-|
+| **Win rate** | Top 50% of bets win |
+| **Ranking** | Accuracy (0-100) → bet size → time |
+| **Min coefficient** | 1.3 |
+| **100-point rule** | Perfect predictions always win |
 
 ### Rooms
 
 | Room | Currency | Range | Fee |
 |------|----------|-------|-----|
-| Wooden | BFS (virtual, free) | 1-10 | 0% |
+| Wooden | BFS (free) | 1-10 | 0% |
 | Bronze | EUR | 1-5 | 10% |
 | Silver | EUR | 10-50 | 7.5% |
 | Golden | EUR | 100-500 | 5% |
 
-### Betting flow
+## Tools (19)
 
-1. Pick a sport & coupon (e.g. Football → 1X2)
-2. Make a forecast (predict match outcomes)
-3. Choose a room & stake
-4. Wait for results — accuracy is scored 0-100, top 50% win
-
-## Tools (17)
-
-### BFS domain
-| Tool | Description |
+### Platform API
+| Tool | What it does |
 |------|-------------|
-| `bfs_login` | Login (handles anti-bot honeypot) |
-| `bfs_logout` | Logout |
-| `bfs_state` | Auth status, username, EUR/BFS balance |
-| `bfs_list_sports` | All available sports/coupons |
-| `bfs_bet_info` | Parse coupon → events, outcomes, rooms |
-| `bfs_place_bet` | Select outcomes, set stake, submit |
+| `bfs_login` | Authenticate |
+| `bfs_logout` | End session |
+| `bfs_auth_status` | Balances (EUR, BFS) |
+| `bfs_coupons` | Available sports/coupons |
+| `bfs_coupon_details` | Events, outcomes, rooms |
+| `bfs_place_bet` | Place a bet |
+| `bfs_bet_history` | **Export bets as CSV** for analysis |
+| `bfs_account` | Account details |
+| `bfs_payment_methods` | Deposit/withdrawal info |
 
-### Browser generic
-| Tool | Description |
+### Page tools
+| Tool | What it does |
 |------|-------------|
-| `browser_navigate` | Go to URL |
-| `browser_text` | Extract text by selector |
-| `browser_html` | Get HTML |
-| `browser_click` | Click element |
-| `browser_fill` | Fill form field |
-| `browser_select` | Select dropdown |
-| `browser_screenshot` | PNG screenshot |
-| `browser_eval` | Execute JavaScript |
-| `browser_forms` | List all forms |
-| `browser_links` | List links |
-| `browser_wait` | Wait ms |
+| `page_open` | Navigate |
+| `page_read` | Read content |
+| `page_click` | Click |
+| `page_fill` | Fill field |
+| `page_select` | Dropdown |
+| `page_screenshot` | Snapshot |
+| `page_script` | Run script |
+| `page_forms` | List forms |
+| `page_links` | List links |
+
+## Architecture
+
+```
+src/bfs_mcp/
+├── browser.py   ← core engine (210 lines)
+├── server.py    ← MCP server, 19 tools (150 lines)
+└── bot.py       ← Telegram LLM agent (200 lines)
+```
 
 ## Env vars (bot only)
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `BFS_TG_TOKEN` | yes | — | Telegram bot token |
-| `BFS_LLM_KEY` | yes | — | OpenRouter / OpenAI API key |
-| `BFS_LLM_BASE` | no | `https://openrouter.ai/api/v1` | LLM API base URL |
-| `BFS_LLM_MODEL` | no | `deepseek/deepseek-chat` | Model ID |
-| `BFS_MAX_HISTORY` | no | `30` | Conversation memory |
-| `BFS_MAX_ITER` | no | `8` | Max tool-call iterations |
+| Variable | Required | Default |
+|----------|----------|---------|
+| `BFS_TG_TOKEN` | yes | — |
+| `BFS_LLM_KEY` | yes | — |
+| `BFS_LLM_BASE` | no | `https://openrouter.ai/api/v1` |
+| `BFS_LLM_MODEL` | no | `deepseek/deepseek-chat` |
+| `BFS_MAX_HISTORY` | no | `30` |
+| `BFS_MAX_ITER` | no | `8` |
