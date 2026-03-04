@@ -341,29 +341,38 @@ class BFSBrowser:
 
     # ── monitoring ────────────────────────────────────────────────────
 
-    async def active_bets(self) -> dict[str, Any]:
-        """Get currently active (unresolved) bets."""
+    async def active_bets(self) -> str:
+        """Get currently active (unresolved) bets as formatted text."""
         await self.goto("/user/bets")
         await self.page.wait_for_timeout(3000)
-        return await self._scrape_bet_table()
+        return await self._format_bet_table("Active bets")
 
-    async def _scrape_bet_table(self) -> dict[str, Any]:
+    async def _format_bet_table(self, title_label: str) -> str:
         title = await self.page.title()
         if "registration" in title.lower() or "error" in title.lower():
-            return {"error": "not authenticated", "title": title}
-        return await self.page.evaluate("""() => {
+            return "Error: not authenticated. Please login first."
+        data = await self.page.evaluate("""() => {
             const t = document.querySelector('#row-content table');
-            if (!t) return {headers: [], rows: [], count: 0};
+            if (!t) return {headers: [], rows: []};
             const h = Array.from(t.querySelectorAll('thead th')).map(th=>th.textContent.trim()).filter(x=>x);
             const r = [];
             t.querySelectorAll('tbody tr').forEach(tr => {
                 const c = Array.from(tr.querySelectorAll('td')).map(td=>td.textContent.trim().replace(/\\s+/g,' ')).filter(x=>x);
                 if(c.length) r.push(c);
             });
-            let csv = h.join(',')+'\\n';
-            r.forEach(row => csv += row.map(c=>'"'+c.replace(/"/g,'""')+'"').join(',')+'\\n');
-            return {headers: h, rows: r, count: r.length, csv};
+            return {headers: h, rows: r};
         }""")
+        headers = data.get("headers", [])
+        rows = data.get("rows", [])
+        if not rows:
+            return f"{title_label}: none"
+        lines = [f"{title_label} ({len(rows)}):", ""]
+        for i, row in enumerate(rows, 1):
+            parts = []
+            for h, v in zip(headers, row):
+                parts.append(f"{h}: {v}")
+            lines.append(f"  {i}. " + " | ".join(parts))
+        return "\n".join(lines)
 
     # ── DOM helpers ───────────────────────────────────────────────────
 
@@ -504,27 +513,11 @@ class BFSBrowser:
                 .filter((v,i,a)=>a.findIndex(x=>x.href===v.href)===i).slice(0,50);
         }}""")
 
-    async def bet_history(self) -> dict[str, Any]:
-        """Scrape bet history table and return as structured data + CSV."""
+    async def bet_history(self) -> str:
+        """Scrape bet history and return as formatted text."""
         await self.goto("/user/bets/archive")
         await self.page.wait_for_timeout(3000)
-
-        data = await self.page.evaluate("""() => {
-            const table = document.querySelector('#row-content table, .dataTable, table');
-            if (!table) return {rows: [], csv: '', error: 'no table found'};
-            const rawH = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
-            const headers = rawH.filter(h => h);
-            const rows = [];
-            table.querySelectorAll('tbody tr').forEach(tr => {
-                const rawCells = Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim().replace(/\\s+/g, ' '));
-                const cells = rawCells.filter(c => c);
-                if (cells.length) rows.push(cells);
-            });
-            let csv = headers.join(',') + '\\n';
-            rows.forEach(r => csv += r.map(c => '"' + c.replace(/"/g, '""') + '"').join(',') + '\\n');
-            return {headers, rows, csv, count: rows.length};
-        }""")
-        return data
+        return await self._format_bet_table("Bet history")
 
     async def account_info(self) -> dict[str, Any]:
         """Get full account details."""
