@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import json
 import logging
 import os
@@ -13,14 +12,11 @@ from typing import Any
 from aiogram import Bot, Dispatcher, Router
 from aiogram.types import Message, BufferedInputFile
 from aiogram.filters import Command
-from aiogram.enums import ParseMode
 from openai import AsyncOpenAI
 
 from .browser import BFSBrowser
 
 log = logging.getLogger(__name__)
-
-# ── config (env) ──────────────────────────────────────────────────────
 
 TG_TOKEN = os.environ["BFS_TG_TOKEN"]
 LLM_KEY = os.environ["BFS_LLM_KEY"]
@@ -29,129 +25,172 @@ LLM_MODEL = os.environ.get("BFS_LLM_MODEL", "deepseek/deepseek-chat")
 MAX_HISTORY = int(os.environ.get("BFS_MAX_HISTORY", "30"))
 MAX_ITER = int(os.environ.get("BFS_MAX_ITER", "8"))
 
-# ── singletons ────────────────────────────────────────────────────────
-
 bot = Bot(token=TG_TOKEN)
 dp = Dispatcher()
 router = Router()
 dp.include_router(router)
-
 bm = BFSBrowser()
 llm = AsyncOpenAI(base_url=LLM_BASE, api_key=LLM_KEY)
 conversations: dict[int, list[dict]] = {}
 
-# ── tool defs (OpenAI function-calling) ───────────────────────────────
 
-TOOLS: list[dict] = [
-    _t("bfs_login", "Login to betfunsports.com.", {"email": "string", "password": "string"}, ["email", "password"])
-    if False else None,  # built below
-]
-
-def _td(name: str, desc: str, props: dict[str, Any], req: list[str] | None = None) -> dict:
+def _td(name: str, desc: str, props: dict[str, Any] | None = None, req: list[str] | None = None) -> dict:
     schema: dict = {"type": "object", "properties": {}}
-    for k, v in props.items():
-        if isinstance(v, str):
-            schema["properties"][k] = {"type": v}
-        else:
-            schema["properties"][k] = v
+    for k, v in (props or {}).items():
+        schema["properties"][k] = {"type": v} if isinstance(v, str) else v
     if req:
         schema["required"] = req
     return {"type": "function", "function": {"name": name, "description": desc, "parameters": schema}}
 
 
 TOOLS = [
-    _td("bfs_login", "Login to betfunsports.com.", {"email": "string", "password": "string"}, ["email", "password"]),
-    _td("bfs_logout", "Logout.", {}),
-    _td("bfs_state", "Current state: URL, auth, balance.", {}),
-    _td("bfs_list_sports", "List all sports / coupons.", {}),
-    _td("bfs_bet_info", "Parse coupon page into events, outcomes, rooms. Call before placing bet.",
-        {"path": "string"}, ["path"]),
+    _td("bfs_login",
+        "Login to betfunsports.com. Handles honeypot fields automatically. Returns auth state, username, EUR and BFS balances.",
+        {"email": "string", "password": "string"}, ["email", "password"]),
+    _td("bfs_logout",
+        "Logout from betfunsports.com and clear session cookies."),
+    _td("bfs_state",
+        "Get current page state: URL, page title, whether user is authenticated, username, EUR balance, BFS balance, in-game amount. "
+        "ALWAYS call this first to check if user is logged in."),
+    _td("bfs_list_sports",
+        "Navigate to homepage and list all available sports and coupons. Returns array of {path, label}. "
+        "Example paths: /football/prizecoupons1X2, /hockey/kHLRegular, /tennis/atpGenevaOpen."),
+    _td("bfs_bet_info",
+        "Navigate to a coupon page and parse it into structured betting info. Returns: couponId, events (with eventId and outcome options), "
+        "rooms (Wooden/Bronze/Silver/Golden with roomId, stakes, submit selectors), and page text. ALWAYS call this before placing a bet.",
+        {"path": {"type": "string", "description": "Coupon path, e.g. /FOOTBALL/spainPrimeraDivision/18638"}}, ["path"]),
     _td("bfs_place_bet",
-        "Place a bet. selections: {eventId: outcomeCode}. 1X2 codes: 8=home,9=draw,10=away. "
-        "room_index: 0=Wooden(TOT) 1=Bronze(EUR) 2=Silver 3=Golden.",
-        {"coupon_path": "string",
-         "selections": {"type": "object", "description": "{eventId: outcomeCode}", "additionalProperties": {"type": "string"}},
-         "room_index": {"type": "integer", "default": 0},
-         "stake": {"type": "string", "default": ""}},
+        "Place a bet on a coupon. Requires login. Selects outcomes, sets stake, submits form. Returns success status and page text after submission.",
+        {"coupon_path": {"type": "string", "description": "Full coupon path from bfs_bet_info"},
+         "selections": {"type": "object", "description": "Map {eventId: outcomeCode}. For 1X2: '8'=home win(1), '9'=draw(X), '10'=away win(2)",
+                        "additionalProperties": {"type": "string"}},
+         "room_index": {"type": "integer", "description": "0=Wooden(BFS,free), 1=Bronze(1-5 EUR), 2=Silver(10-50 EUR), 3=Golden(100-500 EUR)", "default": 0},
+         "stake": {"type": "string", "description": "Bet amount as string. If empty, uses room default."}},
         ["coupon_path", "selections"]),
-    _td("browser_navigate", "Navigate to URL or path.", {"url": "string"}, ["url"]),
-    _td("browser_text", "Get page text.", {"selector": {"type": "string", "default": "#row-content"}}),
-    _td("browser_click", "Click element.", {"selector": "string"}, ["selector"]),
-    _td("browser_fill", "Fill input.", {"selector": "string", "value": "string"}, ["selector", "value"]),
-    _td("browser_select", "Select dropdown.", {"selector": "string", "value": "string"}, ["selector", "value"]),
-    _td("browser_screenshot", "Screenshot (call after important actions).",
+    _td("browser_navigate",
+        "Navigate to any URL or relative path on betfunsports.com. Returns HTTP status, final URL, page title.",
+        {"url": "string"}, ["url"]),
+    _td("browser_text",
+        "Extract visible text from current page by CSS selector. Use '#row-content' for main content, 'body' for full page.",
+        {"selector": {"type": "string", "default": "#row-content"}}),
+    _td("browser_click",
+        "Click a page element by CSS selector. Force-clicks even hidden elements.",
+        {"selector": "string"}, ["selector"]),
+    _td("browser_fill",
+        "Fill a form input by CSS selector.",
+        {"selector": "string", "value": "string"}, ["selector", "value"]),
+    _td("browser_select",
+        "Select an option in a <select> dropdown by value.",
+        {"selector": "string", "value": "string"}, ["selector", "value"]),
+    _td("browser_screenshot",
+        "Take a PNG screenshot of the current page. Call after navigation, login, or bet placement to show user the result.",
         {"full_page": {"type": "boolean", "default": False}}),
-    _td("browser_eval", "Execute JS in page.", {"javascript": "string"}, ["javascript"]),
-    _td("browser_forms", "List all forms with fields.", {}),
-    _td("browser_links", "List page links.", {"filter_pattern": {"type": "string", "default": ""}}),
-    _td("browser_wait", "Wait ms.", {"ms": {"type": "integer", "default": 2000}}),
+    _td("browser_eval",
+        "Execute arbitrary JavaScript in the page context and return the result. Use for complex DOM queries or data extraction.",
+        {"javascript": "string"}, ["javascript"]),
+    _td("browser_forms",
+        "List all HTML forms on the current page with field names, types, values, and visibility. Useful to understand page structure before interaction."),
+    _td("browser_links",
+        "List all links on the current page. Optional substring filter on href.",
+        {"filter_pattern": {"type": "string", "default": ""}}),
+    _td("browser_wait",
+        "Wait N milliseconds for dynamic content to load.",
+        {"ms": {"type": "integer", "default": 2000}}),
 ]
 
-SYSTEM = """Ты — AI-агент, управляющий betfunsports.com через headless браузер.
-Отвечай на русском, кратко.
+SYSTEM = """Ты — AI-агент, управляющий сайтом betfunsports.com через headless-браузер Playwright.
+Ты ОБЯЗАН использовать доступные tool calls для взаимодействия с сайтом. НЕ ВЫДУМЫВАЙ что инструменты недоступны — они все работают.
 
-## Ставки
-- Список купонов: /football/prizecoupons1X2, /football/prizecouponsScore и т.д.
-- Купон: /FOOTBALL/prizecoupons1X2/18580
-- Перед ставкой ВСЕГДА вызови bfs_bet_info — получишь events, outcomes, rooms
-- 1X2 коды: 8=победа хозяев(1), 9=ничья(X), 10=победа гостей(2)
-- Комнаты: 0=Wooden(TOT), 1=Bronze(EUR), 2=Silver(EUR), 3=Golden(EUR)
-- Для ставки: bfs_place_bet(coupon_path, selections={eventId:outcomeCode}, room_index, stake)
+## О системе Betfunsports (TOTUP)
 
-## Правила
-- Проверяй bfs_state — залогинен ли пользователь
-- Для логина используй bfs_login (обходит honeypot)
-- После действий делай browser_screenshot
-- Если купон закрыт — сообщи
-- Регистрация: /fullRegistration, поля: oldUame, oail, password0, password2, firstName, lastName, fbirthDate (DD/MM/YYYY), phone, countryCode"""
+Betfunsports — P2P система спортивных прогнозов. Ставки игроков формируют призовой пул, который полностью распределяется между победителями.
 
+**Ключевые правила:**
+- 50% ставок выигрывают (по точности прогноза)
+- Точность прогноза оценивается от 0 до 100 баллов
+- Выигрыш пропорционален точности × размеру ставки
+- Минимальный коэффициент выигрыша: 1.3
 
-# ── tool execution ────────────────────────────────────────────────────
+**4 стола (rooms):**
+- Wooden (index=0) — BFS (виртуальная валюта, бесплатно), 1-10 BFS
+- Bronze (index=1) — 1-5 EUR, комиссия 10%
+- Silver (index=2) — 10-50 EUR, комиссия 7.5%
+- Golden (index=3) — 100-500 EUR, комиссия 5%
+
+**Виды спорта:** футбол, теннис, хоккей, баскетбол, F1, биатлон, волейбол, бокс, MMA.
+
+**Типы купонов:**
+- 1X2 — исход матча (коды: 8=1 домашняя победа, 9=X ничья, 10=2 гостевая победа)
+- Score — точный счёт
+- GD (Goal Difference) — разница мячей
+- Match Winner, Playoff outcome, и другие
+
+**Ранжирование:** точность → размер ставки → время ставки. Ставки с 100 баллов всегда выигрывают.
+
+## Как делать ставку (ОБЯЗАТЕЛЬНЫЙ порядок)
+
+1. `bfs_state` — проверить залогинен ли пользователь
+2. Если не залогинен — `bfs_login(email, password)`
+3. `bfs_list_sports` — показать доступные купоны
+4. `bfs_bet_info(path)` — ОБЯЗАТЕЛЬНО перед ставкой! Получить eventId, outcomes, rooms
+5. Показать пользователю: матчи, варианты, столы, минимальные ставки
+6. `bfs_place_bet(coupon_path, selections, room_index, stake)` — разместить ставку
+7. `browser_screenshot` — показать результат
+
+## Правила агента
+
+- Отвечай на русском, кратко и по делу
+- ВСЕГДА используй tool calls — они 100% рабочие
+- НИКОГДА не говори что инструменты недоступны
+- После важных действий делай browser_screenshot
+- Для начинающих рекомендуй Wooden стол (бесплатные BFS)
+- Показывай баланс после ставки
+- Если купон закрыт — предложи другой"""
+
 
 async def _exec(name: str, args: dict) -> tuple[str, bytes | None]:
     await bm.start()
-    ss = None
+    j = lambda x: json.dumps(x, ensure_ascii=False, default=str)
 
-    if name == "bfs_login":
-        return json.dumps((await bm.login(args["email"], args["password"])).to_dict(), ensure_ascii=False), None
-    if name == "bfs_logout":
-        return json.dumps(await bm.logout(), ensure_ascii=False), None
-    if name == "bfs_state":
-        return json.dumps((await bm.state()).to_dict(), ensure_ascii=False), None
-    if name == "bfs_list_sports":
-        return json.dumps(await bm.list_sports(), ensure_ascii=False)[:4000], None
-    if name == "bfs_bet_info":
-        return json.dumps(await bm.bet_info(args["path"]), ensure_ascii=False)[:4000], None
-    if name == "bfs_place_bet":
-        r = await bm.place_bet(args["coupon_path"], args["selections"],
-                               args.get("room_index", 0), args.get("stake") or None)
-        return json.dumps(r, ensure_ascii=False)[:4000], await bm.screenshot_bytes()
-    if name == "browser_navigate":
-        return json.dumps(await bm.goto(args["url"]), ensure_ascii=False), None
-    if name == "browser_text":
-        return (await bm.text(args.get("selector", "#row-content")))[:4000], None
-    if name == "browser_click":
-        return await bm.click(args["selector"], force=True), None
-    if name == "browser_fill":
-        return await bm.fill(args["selector"], args["value"], force=True), None
-    if name == "browser_select":
-        return await bm.select(args["selector"], args["value"]), None
-    if name == "browser_screenshot":
-        return "[screenshot]", await bm.screenshot_bytes(args.get("full_page", False))
-    if name == "browser_eval":
-        return json.dumps(await bm.evaluate(args["javascript"]), ensure_ascii=False, default=str)[:4000], None
-    if name == "browser_forms":
-        return json.dumps(await bm.forms(), ensure_ascii=False)[:4000], None
-    if name == "browser_links":
-        return json.dumps(await bm.links(args.get("filter_pattern", "")), ensure_ascii=False)[:4000], None
-    if name == "browser_wait":
-        await bm.wait(args.get("ms", 2000))
-        return "ok", None
+    match name:
+        case "bfs_login":
+            return j((await bm.login(args["email"], args["password"])).to_dict()), None
+        case "bfs_logout":
+            return j(await bm.logout()), None
+        case "bfs_state":
+            return j((await bm.state()).to_dict()), None
+        case "bfs_list_sports":
+            return j(await bm.list_sports())[:4000], None
+        case "bfs_bet_info":
+            return j(await bm.bet_info(args["path"]))[:4000], None
+        case "bfs_place_bet":
+            r = await bm.place_bet(args["coupon_path"], args["selections"],
+                                   args.get("room_index", 0), args.get("stake") or None)
+            return j(r)[:4000], await bm.screenshot_bytes()
+        case "browser_navigate":
+            return j(await bm.goto(args["url"])), None
+        case "browser_text":
+            return (await bm.text(args.get("selector", "#row-content")))[:4000], None
+        case "browser_click":
+            return await bm.click(args["selector"], force=True), None
+        case "browser_fill":
+            return await bm.fill(args["selector"], args["value"], force=True), None
+        case "browser_select":
+            return await bm.select(args["selector"], args["value"]), None
+        case "browser_screenshot":
+            return "[screenshot taken]", await bm.screenshot_bytes(args.get("full_page", False))
+        case "browser_eval":
+            return j(await bm.evaluate(args["javascript"]))[:4000], None
+        case "browser_forms":
+            return j(await bm.forms())[:4000], None
+        case "browser_links":
+            return j(await bm.links(args.get("filter_pattern", "")))[:4000], None
+        case "browser_wait":
+            await bm.wait(args.get("ms", 2000))
+            return "ok", None
+        case _:
+            return f"unknown tool: {name}", None
 
-    return f"unknown tool: {name}", None
-
-
-# ── LLM agent loop ───────────────────────────────────────────────────
 
 async def _agent(chat_id: int, user_text: str, msg: Message) -> None:
     hist = conversations.setdefault(chat_id, [])
@@ -162,6 +201,7 @@ async def _agent(chat_id: int, user_text: str, msg: Message) -> None:
     msgs = [{"role": "system", "content": SYSTEM}] + hist
     screenshots: list[bytes] = []
     status_msg = await msg.answer("🤔")
+    final = ""
 
     for i in range(MAX_ITER):
         try:
@@ -209,44 +249,38 @@ async def _agent(chat_id: int, user_text: str, msg: Message) -> None:
     try:
         await status_msg.edit_text(final[:4096])
     except Exception:
-        for chunk in range(0, len(final), 4096):
-            await msg.answer(final[chunk:chunk+4096])
+        for c in range(0, len(final), 4096):
+            await msg.answer(final[c:c+4096])
 
     for ss in screenshots:
         try:
             await msg.answer_photo(BufferedInputFile(ss, filename="screen.png"))
         except Exception as e:
-            log.error("photo send: %s", e)
+            log.error("photo: %s", e)
 
-
-# ── handlers ──────────────────────────────────────────────────────────
 
 @router.message(Command("start"))
 async def h_start(msg: Message):
     await msg.answer(
-        "👋 BFS Agent — управляю betfunsports.com через браузер.\n\n"
-        "Пиши на естественном языке:\n"
+        "👋 BFS Agent — управляю betfunsports.com\n\n"
+        "Примеры:\n"
         "• «Залогинься как user@mail.com пароль»\n"
-        "• «Какие виды спорта?»\n"
-        "• «Покажи купоны футбол 1X2»\n"
-        "• «Поставь на победу хозяев»\n"
-        "• «Баланс»\n"
-        "• «Скриншот»\n\n"
-        "/clear — сброс диалога  /screen — скриншот",
+        "• «Какие купоны есть?»\n"
+        "• «Покажи футбол 1X2»\n"
+        "• «Поставь на победу хозяев на Wooden столе»\n"
+        "• «Мой баланс»\n\n"
+        "/clear — сброс  /screen — скриншот",
     )
-
 
 @router.message(Command("clear"))
 async def h_clear(msg: Message):
     conversations.pop(msg.chat.id, None)
     await msg.answer("✅ История очищена.")
 
-
 @router.message(Command("screen"))
 async def h_screen(msg: Message):
     await bm.start()
     await msg.answer_photo(BufferedInputFile(await bm.screenshot_bytes(), filename="s.png"))
-
 
 @router.message()
 async def h_msg(msg: Message):
@@ -254,23 +288,19 @@ async def h_msg(msg: Message):
         await _agent(msg.chat.id, msg.text, msg)
 
 
-# ── entry point ───────────────────────────────────────────────────────
-
 async def _main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    log.info("starting bot (model=%s)...", LLM_MODEL)
+    log.info("starting (model=%s)", LLM_MODEL)
     await bm.start()
     await bm.goto("/")
-    log.info("browser ready, polling...")
+    log.info("polling...")
     try:
         await dp.start_polling(bot)
     finally:
         await bm.stop()
 
-
 def main():
     asyncio.run(_main())
-
 
 if __name__ == "__main__":
     main()
