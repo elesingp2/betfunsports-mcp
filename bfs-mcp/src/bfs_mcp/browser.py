@@ -122,8 +122,13 @@ class BFSBrowser:
 
     # ── auth ──────────────────────────────────────────────────────────
 
-    async def login(self, email: str, password: str) -> State:
+    async def login(self, email: str, password: str) -> dict[str, Any]:
         await self.goto("/")
+        # Check if already authenticated
+        s = await self.state()
+        if s.authenticated:
+            return {**s.to_dict(), "message": "already logged in"}
+
         await self.page.evaluate(
             """([e, p]) => {
                 for (const c of document.querySelectorAll('#login_form')) {
@@ -139,13 +144,126 @@ class BFSBrowser:
         )
         await self.page.wait_for_load_state("domcontentloaded")
         await self.page.wait_for_timeout(2000)
+
+        # Check for flash error (e.g. "Player already logged in")
+        flash = await self.page.evaluate("""() => {
+            const c = document.cookie;
+            const m = c.match(/PLAY_FLASH=([^;]+)/);
+            return m ? decodeURIComponent(m[1]) : '';
+        }""")
+
         await self._save_cookies()
-        return await self.state()
+        s = await self.state()
+        result = s.to_dict()
+        if flash:
+            result["error"] = flash
+        if not s.authenticated and not flash:
+            result["error"] = "login failed — check credentials"
+        return result
 
     async def logout(self) -> dict[str, str]:
         await self.goto("/logout")
         await self._save_cookies()
         return {"status": "ok", "url": self.page.url}
+
+    async def register(self, username: str, email: str, password: str,
+                       first_name: str, last_name: str, birth_date: str,
+                       phone: str, country_code: str = "US",
+                       city: str = "", address: str = "", zip_code: str = "",
+                       sex: str = "male") -> dict[str, Any]:
+        """Register a new account. birth_date format: DD/MM/YYYY."""
+        await self.goto("/fullRegistration")
+        await self.page.wait_for_timeout(1000)
+
+        form_exists = await self.page.locator("#fform_registration").count() > 0
+        if not form_exists:
+            return {"success": False, "error": "registration form not found (may be logged in)"}
+
+        # Fill visible fields
+        await self.page.fill("#oldUame", username)
+        await self.page.fill("#oail", email)
+        await self.page.fill("#password0", password)
+        await self.page.fill("#password2", password)
+        await self.page.fill("#firstName", first_name)
+        await self.page.fill("#lastName", last_name)
+        await self.page.fill("#fbirthDate", birth_date)
+        await self.page.fill("#phone", phone)
+        await self.page.select_option("#countryCode", country_code)
+
+        if city:
+            await self.page.fill("#cityName", city)
+        if address:
+            await self.page.fill("#addressLine1", address)
+        if zip_code:
+            await self.page.fill("#zipCode", zip_code)
+
+        if sex == "female":
+            await self.page.click("#sex_female", force=True)
+
+        # Accept terms
+        cb = self.page.locator("#fform_registration input[type='checkbox']")
+        for i in range(await cb.count()):
+            if not await cb.nth(i).is_checked():
+                await cb.nth(i).check(force=True)
+
+        # Fill honeypot hidden fields via JS
+        await self.page.evaluate(f"""() => {{
+            const f = document.getElementById('fform_registration');
+            if (!f) return;
+            const h = (id, val) => {{ const e = f.querySelector('#'+id); if(e) e.value = val; }};
+            h('username', {json.dumps(username)});
+            h('email', {json.dumps(email)});
+            h('password', {json.dumps(password)});
+        }}""")
+
+        # Submit
+        btn = self.page.locator('#fform_registration button[type="submit"], #fform_registration input[type="submit"]')
+        if await btn.count() > 0:
+            await btn.first.click(force=True)
+        else:
+            await self.page.evaluate("document.getElementById('fform_registration').submit()")
+
+        await self.page.wait_for_timeout(3000)
+
+        txt = await self.text("#row-content")
+        url = self.page.url
+        errors = await self.page.locator("label.error, .alert-danger, .error-message").all_text_contents()
+        errors = [e.strip() for e in errors if e.strip()]
+
+        success = any(kw in txt.lower() for kw in ["success", "welcome", "confirm", "verify", "email sent", "registered", "thank"])
+
+        return {
+            "success": success,
+            "url": url,
+            "errors": errors or None,
+            "page_text": txt[:500],
+        }
+
+    # ── monitoring ────────────────────────────────────────────────────
+
+    async def active_bets(self) -> dict[str, Any]:
+        """Get currently active (unresolved) bets."""
+        await self.goto("/user/bets")
+        await self.page.wait_for_timeout(3000)
+        return await self._scrape_bet_table()
+
+    async def _scrape_bet_table(self) -> dict[str, Any]:
+        title = await self.page.title()
+        if "registration" in title.lower() or "error" in title.lower():
+            return {"error": "not authenticated", "title": title}
+        return await self.page.evaluate("""() => {
+            const t = document.querySelector('#row-content table');
+            if (!t) return {headers: [], rows: [], count: 0};
+            const h = Array.from(t.querySelectorAll('thead th')).map(th=>th.textContent.trim()).filter(x=>x);
+            const r = [];
+            t.querySelectorAll('tbody tr').forEach(tr => {
+                const c = Array.from(tr.querySelectorAll('td')).map(td=>td.textContent.trim().replace(/\\s+/g,' ')).filter(x=>x);
+                if(c.length) r.push(c);
+            });
+            let csv = h.join(',')+'\\n';
+            r.forEach(row => csv += row.map(c=>'"'+c.replace(/"/g,'""')+'"').join(',')+'\\n');
+            return {headers: h, rows: r, count: r.length, csv};
+        }""")
 
     # ── DOM helpers ───────────────────────────────────────────────────
 
