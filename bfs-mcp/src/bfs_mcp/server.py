@@ -14,10 +14,34 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelna
 
 mcp = FastMCP(
     "bfs-browser",
-    instructions=(
-        "MCP server that drives betfunsports.com through a headless browser. "
-        "No API — all interaction goes through the real website DOM via Playwright."
-    ),
+    instructions="""\
+MCP server that drives betfunsports.com through a headless Chromium browser (Playwright).
+No API — all interaction goes through the real website DOM.
+
+## About Betfunsports (TOTUP system)
+P2P sports prediction platform. Player bets form a prize pool distributed among winners.
+- 50% of bets win (ranked by forecast accuracy 0-100 points)
+- Winnings proportional to accuracy × bet size, min coefficient 1.3
+- 4 rooms: Wooden (BFS, free, 1-10), Bronze (EUR, 1-5, 10% fee), Silver (EUR, 10-50, 7.5%), Golden (EUR, 100-500, 5%)
+- Sports: football, tennis, hockey, basketball, F1, biathlon, volleyball, boxing, MMA
+- Coupon types: 1X2 (match outcome), Score, Goal Difference, Match Winner, etc.
+
+## Betting flow
+1. Call bfs_state to check auth
+2. Call bfs_login if needed
+3. Call bfs_list_sports to find coupons
+4. Call bfs_bet_info(path) to get events, outcomes, rooms
+5. Call bfs_place_bet(coupon_path, selections={eventId: outcomeCode}, room_index, stake)
+   - 1X2 outcome codes: "8"=home win(1), "9"=draw(X), "10"=away win(2)
+
+## Key URLs
+- Homepage: /
+- Sports: /football/prizecoupons1X2, /football/prizecouponsScore, /hockey/kHLRegular, etc.
+- Specific coupon: /FOOTBALL/spainPrimeraDivision/18638
+- Registration: /fullRegistration
+- Profile: /profile
+- Payment: /paymentmethods
+""",
 )
 
 _bm = BFSBrowser()
