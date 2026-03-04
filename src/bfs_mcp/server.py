@@ -69,10 +69,25 @@ async def _e():
 # ── Platform API ──────────────────────────────────────────────────────
 
 @mcp.tool()
-async def bfs_login(email: str, password: str) -> str:
-    """Authenticate with betfunsports.com. Returns username, EUR balance, BFS balance."""
+async def bfs_register(username: str, email: str, password: str,
+                       first_name: str, last_name: str, birth_date: str,
+                       phone: str, country_code: str = "US",
+                       city: str = "", address: str = "", zip_code: str = "") -> str:
+    """Register a new account on betfunsports.com.
+    birth_date format: DD/MM/YYYY. country_code: ISO 2-letter (US, DE, GB, etc.).
+    Password: min 8 chars, mix of upper/lower/numbers/symbols.
+    New accounts get 100 free BFS for Wooden room betting."""
     await _e()
-    return _j((await _b.login(email, password)).to_dict())
+    return _j(await _b.register(username, email, password, first_name, last_name,
+                                birth_date, phone, country_code, city, address, zip_code))
+
+
+@mcp.tool()
+async def bfs_login(email: str, password: str) -> str:
+    """Authenticate. Returns balances or error if account is already logged in elsewhere.
+    If error='invalidLoginMessage=Player+already+logged+in', the user must logout from their other session first."""
+    await _e()
+    return _j(await _b.login(email, password))
 
 
 @mcp.tool()
@@ -87,6 +102,14 @@ async def bfs_auth_status() -> str:
     """Check authentication and get current balances (EUR, BFS, in-game amount)."""
     await _e()
     return _j((await _b.state()).to_dict())
+
+
+@mcp.tool()
+async def bfs_active_bets() -> str:
+    """Get currently active (unresolved) bets. These are bets waiting for event results.
+    Returns CSV with: ID, Coupon, Date, Stake. Use for portfolio monitoring."""
+    await _e()
+    return _j(await _b.active_bets())
 
 
 @mcp.tool()

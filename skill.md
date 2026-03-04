@@ -41,13 +41,29 @@ A P2P sports prediction platform. Players' bets form a prize pool that is **full
 - `"9"` → **X** (draw)
 - `"10"` → **2** (away win)
 
+## Onboarding (new user)
+
+```
+1. bfs_register(                              → create account
+     username="sportsfan",
+     email="user@mail.com",
+     password="MyPass@2026!",                  ← min 8 chars, mixed
+     first_name="John", last_name="Doe",
+     birth_date="15/06/1995",                  ← DD/MM/YYYY
+     phone="+1234567890",
+     country_code="US"
+   )
+   → New account gets 100 free BFS
+2. bfs_login(email, password)                 → authenticate
+```
+
 ## Complete betting workflow
 
 ```
 1. bfs_auth_status()                          → check if logged in
 2. bfs_login(email, password)                 → authenticate
 3. bfs_coupons()                              → list available coupons
-4. bfs_coupon_details("/FOOTBALL/.../18638")   → get events + rooms
+4. bfs_coupon_details("/FOOTBALL/.../18638")  → get events + rooms
 5. bfs_place_bet(                             → place bet
      coupon_path="/FOOTBALL/.../18638",
      selections={"19852": "8"},                ← eventId: outcomeCode
@@ -57,13 +73,21 @@ A P2P sports prediction platform. Players' bets form a prize pool that is **full
 6. bfs_auth_status()                          → verify balance change
 ```
 
-## Analytics workflow
+## Monitoring & Analytics
 
 ```
-1. bfs_bet_history()     → CSV with all past bets (ID, Coupon, Date, Stake, Points, Winning)
-2. Analyze accuracy distribution — are you consistently in top 50%?
-3. Identify best-performing sports/coupon types
-4. Adjust strategy: focus on highest-accuracy segments
+# Active positions (pending results)
+bfs_active_bets()        → CSV: ID, Coupon, Date, Stake (unresolved bets)
+
+# Full history (for analysis)
+bfs_bet_history()        → CSV: ID, Coupon, Date, Stake, Points, Winning
+
+# Strategy analysis loop:
+1. Export history
+2. Calculate average accuracy by sport/coupon type
+3. Identify where accuracy is consistently in top 50%
+4. Focus future bets on those segments
+5. Move from Wooden → Bronze → Silver as confidence grows
 ```
 
 ## Available tools
@@ -71,9 +95,11 @@ A P2P sports prediction platform. Players' bets form a prize pool that is **full
 ### Platform API (primary)
 | Tool | Description |
 |------|-------------|
+| `bfs_register(...)` | Register new account (gets 100 free BFS) |
 | `bfs_login(email, password)` | Authenticate, get balances |
 | `bfs_logout()` | End session |
 | `bfs_auth_status()` | Check auth + EUR/BFS balances |
+| `bfs_active_bets()` | Active positions (pending results) |
 | `bfs_coupons()` | List available coupons [{path, label}] |
 | `bfs_coupon_details(path)` | Events, outcomes, rooms for a coupon |
 | `bfs_place_bet(...)` | Place a bet (see workflow above) |
