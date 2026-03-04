@@ -1,125 +1,93 @@
 # bfs-mcp
 
-Platform API for [betfunsports.com](https://betfunsports.com) — lets AI agents autonomously browse sports events, place bets, and earn money.
+MCP server for [betfunsports.com](https://betfunsports.com) — zero-config sports prediction platform API for AI agents.
 
-Works as an MCP server (Claude, Cursor, OpenClaw, any MCP client) and as a standalone Telegram bot.
+Install → connect → the agent can register, login, browse events, place bets, and earn.
+No API keys. No configuration. No tokens. Credentials are auto-saved after first login.
 
 ## Install
 
 ```bash
 pip install git+https://github.com/elesingp2/bfs-knowledge.git#subdirectory=bfs-mcp
-playwright install chromium
+playwright install --with-deps chromium
 ```
 
-## MCP Server
+## Connect
 
-```bash
-bfs-mcp
-```
-
-Runs on stdio. Add to **Claude Desktop** (`claude_desktop_config.json`):
-
+**Claude Desktop** (`claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
-    "bfs": {
-      "command": "bfs-mcp"
-    }
+    "bfs": { "command": "bfs-mcp" }
   }
 }
 ```
 
-**Cursor** (Settings → MCP → Add):
-```json
-{
-  "mcpServers": {
-    "bfs": {
-      "command": "bfs-mcp"
-    }
-  }
-}
-```
+**Cursor:** Settings → MCP → Add → command: `bfs-mcp`
 
-The agent gets 19 tools + full platform instructions. See [`skill.md`](skill.md) for the autonomous earning guide.
+**Any MCP client:** `bfs-mcp` runs on stdio.
 
-## Telegram Bot
+The agent receives [`skill.md`](skill.md) as instructions — it knows the platform, all tools, and the betting workflow automatically.
 
-```bash
-pip install "bfs-mcp[bot]"
+## What happens
 
-export BFS_TG_TOKEN=...                          # Telegram bot token
-export BFS_LLM_KEY=...                           # OpenRouter API key
-export BFS_LLM_MODEL=deepseek/deepseek-chat      # ~$0.0002/request
+1. Agent calls `bfs_auth_status()` — checks if already logged in
+2. Agent calls `bfs_login("user@email.com", "password")` — authenticates, **credentials auto-saved** to `~/.bfs-mcp/`
+3. Next session: `bfs_login()` with no args uses saved credentials
+4. Agent browses coupons, places bets, analyzes history
 
-bfs-bot
-```
-
-Write naturally: "залогинься", "покажи купоны", "поставь на победу хозяев на Silver столе".
+No human in the loop after initial login.
 
 ## How Betfunsports works
 
-P2P sports prediction platform. Player bets form a prize pool — **fully distributed** among winners.
+P2P sports prediction. Bets form a prize pool — **100% distributed** among winners.
 
-| | |
-|-|-|
-| **Win rate** | Top 50% of bets win |
-| **Ranking** | Accuracy (0-100) → bet size → time |
-| **Min coefficient** | 1.3 |
-| **100-point rule** | Perfect predictions always win |
-
-### Rooms
+- Top 50% of bets win (ranked by accuracy 0–100)
+- Perfect predictions (100 points) always win
+- Min win coefficient: 1.3
+- Sports: Football, Tennis, Hockey, Basketball, F1, Biathlon, Volleyball, Boxing, MMA
 
 | Room | Currency | Range | Fee |
 |------|----------|-------|-----|
-| Wooden | BFS (free) | 1-10 | 0% |
-| Bronze | EUR | 1-5 | 10% |
-| Silver | EUR | 10-50 | 7.5% |
-| Golden | EUR | 100-500 | 5% |
+| Wooden | BFS (free) | 1–10 | 0% |
+| Bronze | EUR | 1–5 | 10% |
+| Silver | EUR | 10–50 | 7.5% |
+| Golden | EUR | 100–500 | 5% |
 
-## Tools (19)
+New accounts get **100 free BFS** — start betting immediately.
 
-### Platform API
+## Tools (14)
+
 | Tool | What it does |
 |------|-------------|
-| `bfs_login` | Authenticate |
+| `bfs_auth_status` | Check session + balances |
+| `bfs_login` | Login (auto-saves creds) |
 | `bfs_logout` | End session |
-| `bfs_auth_status` | Balances (EUR, BFS) |
-| `bfs_coupons` | Available sports/coupons |
-| `bfs_coupon_details` | Events, outcomes, rooms |
+| `bfs_register` | Create account |
+| `bfs_confirm_registration` | Email confirmation |
+| `bfs_coupons` | List available events |
+| `bfs_coupon_details` | Match details + outcomes |
 | `bfs_place_bet` | Place a bet |
-| `bfs_bet_history` | **Export bets as CSV** for analysis |
-| `bfs_account` | Account details |
-| `bfs_payment_methods` | Deposit/withdrawal info |
+| `bfs_active_bets` | Open positions |
+| `bfs_bet_history` | Full history |
+| `bfs_account` | Account info |
+| `bfs_payment_methods` | Deposit/withdrawal |
+| `bfs_screenshot` | Page screenshot |
 
-### Page tools
-| Tool | What it does |
-|------|-------------|
-| `page_open` | Navigate |
-| `page_read` | Read content |
-| `page_click` | Click |
-| `page_fill` | Fill field |
-| `page_select` | Dropdown |
-| `page_screenshot` | Snapshot |
-| `page_script` | Run script |
-| `page_forms` | List forms |
-| `page_links` | List links |
+## Data storage
+
+All persistent data is in `~/.bfs-mcp/`:
+- `credentials.json` — email + password (auto-saved after login)
+- `cookies.json` — browser session cookies
 
 ## Architecture
 
 ```
 src/bfs_mcp/
-├── browser.py   ← core engine (210 lines)
-├── server.py    ← MCP server, 19 tools (150 lines)
-└── bot.py       ← Telegram LLM agent (200 lines)
+├── browser.py   ← Playwright engine (headless Chromium)
+└── server.py    ← MCP server, 14 tools
 ```
 
-## Env vars (bot only)
+## License
 
-| Variable | Required | Default |
-|----------|----------|---------|
-| `BFS_TG_TOKEN` | yes | — |
-| `BFS_LLM_KEY` | yes | — |
-| `BFS_LLM_BASE` | no | `https://openrouter.ai/api/v1` |
-| `BFS_LLM_MODEL` | no | `deepseek/deepseek-chat` |
-| `BFS_MAX_HISTORY` | no | `30` |
-| `BFS_MAX_ITER` | no | `8` |
+MIT

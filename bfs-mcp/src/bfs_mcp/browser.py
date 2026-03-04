@@ -14,7 +14,9 @@ from playwright.async_api import Browser, BrowserContext, Page, Playwright, asyn
 log = logging.getLogger(__name__)
 
 BASE_URL = "https://betfunsports.com"
-COOKIE_PATH = Path.home() / ".bfs-mcp" / "cookies.json"
+DATA_DIR = Path.home() / ".bfs-mcp"
+COOKIE_PATH = DATA_DIR / "cookies.json"
+CREDS_PATH = DATA_DIR / "credentials.json"
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -80,7 +82,7 @@ class BFSBrowser:
     async def _save_cookies(self) -> None:
         if not self._ctx:
             return
-        COOKIE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
         COOKIE_PATH.write_text(json.dumps(await self._ctx.cookies(), ensure_ascii=False, indent=2))
 
     async def _load_cookies(self) -> None:
@@ -90,6 +92,26 @@ class BFSBrowser:
             await self._ctx.add_cookies(json.loads(COOKIE_PATH.read_text()))
         except Exception:
             log.warning("cookie load failed", exc_info=True)
+
+    # ── credentials ───────────────────────────────────────────────────
+
+    @staticmethod
+    def save_credentials(email: str, password: str) -> None:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        CREDS_PATH.write_text(json.dumps({"email": email, "password": password}))
+        log.info("credentials saved to %s", CREDS_PATH)
+
+    @staticmethod
+    def load_credentials() -> dict[str, str] | None:
+        if not CREDS_PATH.exists():
+            return None
+        try:
+            data = json.loads(CREDS_PATH.read_text())
+            if data.get("email") and data.get("password"):
+                return data
+        except Exception:
+            pass
+        return None
 
     # ── navigation ────────────────────────────────────────────────────
 
@@ -124,11 +146,24 @@ class BFSBrowser:
 
     async def login(self, email: str, password: str) -> dict[str, Any]:
         await self.goto("/")
-        # Check if already authenticated
         s = await self.state()
         if s.authenticated:
             return {**s.to_dict(), "message": "already logged in"}
 
+        result = await self._submit_login(email, password)
+
+        if not result.get("authenticated") and "already logged" in result.get("error", "").lower():
+            log.info("session conflict — logging out and retrying")
+            await self.logout()
+            await self.goto("/")
+            result = await self._submit_login(email, password)
+
+        if result.get("authenticated"):
+            self.save_credentials(email, password)
+
+        return result
+
+    async def _submit_login(self, email: str, password: str) -> dict[str, Any]:
         await self.page.evaluate(
             """([e, p]) => {
                 for (const c of document.querySelectorAll('#login_form')) {
@@ -137,27 +172,57 @@ class BFSBrowser:
                     if (!re||!rp) continue;
                     re.value=e; rp.value=p;
                     const f = c.querySelector('form.loginForm1');
-                    if (f) { f.querySelector('[name="email"]').value=e; f.querySelector('[name="password"]').value=p; f.submit(); return; }
+                    if (f) {
+                        const ei = f.querySelector('[name="email"]');
+                        const pi = f.querySelector('[name="password"]');
+                        if(ei) ei.value=e; if(pi) pi.value=p;
+                    }
                 }
             }""",
             [email, password],
         )
-        await self.page.wait_for_load_state("domcontentloaded")
-        await self.page.wait_for_timeout(2000)
 
-        # Check for flash error (e.g. "Player already logged in")
-        flash = await self.page.evaluate("""() => {
-            const c = document.cookie;
-            const m = c.match(/PLAY_FLASH=([^;]+)/);
-            return m ? decodeURIComponent(m[1]) : '';
-        }""")
+        try:
+            async with self.page.expect_navigation(wait_until="domcontentloaded", timeout=15_000):
+                await self.page.evaluate(
+                    """() => {
+                        for (const c of document.querySelectorAll('#login_form')) {
+                            if (c.offsetParent === null) continue;
+                            const f = c.querySelector('form.loginForm1');
+                            if (f) { f.submit(); return true; }
+                        }
+                        return false;
+                    }"""
+                )
+        except Exception:
+            pass
+
+        await self.page.wait_for_timeout(3000)
+
+        error = ""
+        try:
+            error = await self.page.evaluate("""() => {
+                const body = (document.body.textContent || '').replace(/\\s+/g, ' ');
+                if (/player already logged/i.test(body)) return 'Player already logged in';
+                if (/login failed/i.test(body)) return 'Login failed';
+                const flash = (document.cookie.match(/PLAY_FLASH=([^;]+)/) || [])[1];
+                if (flash) return decodeURIComponent(flash);
+                const modal = document.querySelector('.modal.show, .modal-dialog, .alert-danger, .swal2-popup');
+                if (modal) {
+                    const t = modal.textContent.trim();
+                    if (t) return t.substring(0, 200);
+                }
+                return '';
+            }""")
+        except Exception:
+            log.warning("could not read login error", exc_info=True)
 
         await self._save_cookies()
         s = await self.state()
         result = s.to_dict()
-        if flash:
-            result["error"] = flash
-        if not s.authenticated and not flash:
+        if error:
+            result["error"] = error
+        if not s.authenticated and not error:
             result["error"] = "login failed — check credentials"
         return result
 
@@ -179,91 +244,160 @@ class BFSBrowser:
         if not form_exists:
             return {"success": False, "error": "registration form not found (may be logged in)"}
 
-        # Fill visible fields
         await self.page.fill("#oldUame", username)
         await self.page.fill("#oail", email)
         await self.page.fill("#password0", password)
         await self.page.fill("#password2", password)
         await self.page.fill("#firstName", first_name)
         await self.page.fill("#lastName", last_name)
-        await self.page.fill("#fbirthDate", birth_date)
+
+        await self.page.evaluate(
+            f'document.getElementById("fbirthDate").value = {json.dumps(birth_date)}'
+        )
+
         await self.page.fill("#phone", phone)
         await self.page.select_option("#countryCode", country_code)
 
-        if city:
-            await self.page.fill("#cityName", city)
-        if address:
-            await self.page.fill("#addressLine1", address)
-        if zip_code:
-            await self.page.fill("#zipCode", zip_code)
+        await self.page.fill("#cityName", city or "-")
+        await self.page.fill("#addressLine1", address or "-")
+        await self.page.evaluate(
+            f'document.getElementById("zipCode").value = {json.dumps(zip_code or "00000")}'
+        )
 
         if sex == "female":
             await self.page.click("#sex_female", force=True)
 
-        # Accept terms
         cb = self.page.locator("#fform_registration input[type='checkbox']")
         for i in range(await cb.count()):
             if not await cb.nth(i).is_checked():
                 await cb.nth(i).check(force=True)
 
-        # Fill honeypot hidden fields via JS
         await self.page.evaluate(f"""() => {{
             const f = document.getElementById('fform_registration');
             if (!f) return;
-            const h = (id, val) => {{ const e = f.querySelector('#'+id); if(e) e.value = val; }};
+            const h = (id, val) => {{
+                const e = f.querySelector('#'+id);
+                if (!e) return;
+                e.removeAttribute('maxlength');
+                e.value = val;
+            }};
             h('username', {json.dumps(username)});
             h('email', {json.dumps(email)});
             h('password', {json.dumps(password)});
         }}""")
 
-        # Submit
+        initial_url = self.page.url
         btn = self.page.locator('#fform_registration button[type="submit"], #fform_registration input[type="submit"]')
         if await btn.count() > 0:
             await btn.first.click(force=True)
         else:
             await self.page.evaluate("document.getElementById('fform_registration').submit()")
 
-        await self.page.wait_for_timeout(3000)
+        await self.page.wait_for_timeout(4000)
 
+        new_url = self.page.url
         txt = await self.text("#row-content")
-        url = self.page.url
         errors = await self.page.locator("label.error, .alert-danger, .error-message").all_text_contents()
         errors = [e.strip() for e in errors if e.strip()]
 
-        success = any(kw in txt.lower() for kw in ["success", "welcome", "confirm", "verify", "email sent", "registered", "thank"])
+        navigated = new_url != initial_url
+        low = txt.lower()
+        success_keywords = ["success", "welcome", "email sent", "registered",
+                            "thank", "verify your email", "check your email",
+                            "confirmation link", "finishing registration", "confirmation email"]
+        has_keyword = any(kw in low for kw in success_keywords)
+        still_on_form = "join the club" in low or "/fullRegistration" in new_url
+
+        success = (has_keyword or navigated) and not still_on_form
+        needs_confirmation = any(kw in low for kw in
+                                 ["confirmation email", "finishing registration",
+                                  "verify your email", "check your email"])
+
+        mailbox_link = await self.page.evaluate("""() => {
+            const a = document.querySelector('#row-content a[href*="mail"]');
+            return a ? a.href : null;
+        }""")
+
+        if success:
+            self.save_credentials(email, password)
+
+        result: dict[str, Any] = {
+            "success": success,
+            "url": new_url,
+            "errors": errors or None,
+            "page_text": txt[:800],
+        }
+        if needs_confirmation:
+            result["needs_email_confirmation"] = True
+            result["message"] = "Check your inbox and click the confirmation link to activate the account."
+            if mailbox_link:
+                result["mailbox_link"] = mailbox_link
+        return result
+
+    async def confirm_registration(self, confirmation_url: str) -> dict[str, Any]:
+        """Visit an email confirmation link to activate a registered account."""
+        if not confirmation_url.startswith("http"):
+            confirmation_url = f"{BASE_URL}{confirmation_url}"
+
+        resp = await self.page.goto(confirmation_url, wait_until="domcontentloaded", timeout=15_000)
+        await self.page.wait_for_timeout(3000)
+
+        url = self.page.url
+        txt = await self.text("#row-content")
+        low = txt.lower()
+
+        confirmed = any(kw in low for kw in
+                        ["confirmed", "activated", "success", "welcome"])
+        s = await self.state()
 
         return {
-            "success": success,
+            "confirmed": confirmed or s.authenticated,
+            "authenticated": s.authenticated,
             "url": url,
-            "errors": errors or None,
-            "page_text": txt[:500],
+            "status": resp.status if resp else 0,
+            "page_text": txt[:800],
         }
 
     # ── monitoring ────────────────────────────────────────────────────
 
-    async def active_bets(self) -> dict[str, Any]:
-        """Get currently active (unresolved) bets."""
+    async def active_bets(self) -> str:
+        """Get currently active (unresolved) bets as formatted text."""
         await self.goto("/user/bets")
         await self.page.wait_for_timeout(3000)
-        return await self._scrape_bet_table()
+        return await self._format_bet_table("Active bets")
 
-    async def _scrape_bet_table(self) -> dict[str, Any]:
+    async def _format_bet_table(self, title_label: str) -> str:
         title = await self.page.title()
         if "registration" in title.lower() or "error" in title.lower():
-            return {"error": "not authenticated", "title": title}
-        return await self.page.evaluate("""() => {
+            return "Error: not authenticated. Please login first."
+        data = await self.page.evaluate("""() => {
             const t = document.querySelector('#row-content table');
-            if (!t) return {headers: [], rows: [], count: 0};
+            if (!t) return {headers: [], rows: []};
             const h = Array.from(t.querySelectorAll('thead th')).map(th=>th.textContent.trim()).filter(x=>x);
             const r = [];
             t.querySelectorAll('tbody tr').forEach(tr => {
                 const c = Array.from(tr.querySelectorAll('td')).map(td=>td.textContent.trim().replace(/\\s+/g,' ')).filter(x=>x);
                 if(c.length) r.push(c);
             });
-            let csv = h.join(',')+'\\n';
-            r.forEach(row => csv += row.map(c=>'"'+c.replace(/"/g,'""')+'"').join(',')+'\\n');
-            return {headers: h, rows: r, count: r.length, csv};
+            return {headers: h, rows: r};
         }""")
+        headers = data.get("headers", [])
+        rows = data.get("rows", [])
+        if not rows:
+            return f"{title_label}: none"
+        lines = [f"{title_label} ({len(rows)}):", ""]
+        for i, row in enumerate(rows, 1):
+            parts = []
+            for h, v in zip(headers, row):
+                parts.append(f"{h}: {v}")
+            lines.append(f"  {i}. " + " | ".join(parts))
+        return "\n".join(lines)
+
+    async def bet_history(self) -> str:
+        """Scrape bet history and return as formatted text."""
+        await self.goto("/user/bets/archive")
+        await self.page.wait_for_timeout(3000)
+        return await self._format_bet_table("Bet history")
 
     # ── DOM helpers ───────────────────────────────────────────────────
 
@@ -271,40 +405,11 @@ class BFSBrowser:
         raw = await self.page.locator(selector).first.text_content() or ""
         return " ".join(raw.split())
 
-    async def html(self, selector: str = "#row-content") -> str:
-        try:
-            return await self.page.locator(selector).first.inner_html()
-        except Exception:
-            return await self.page.content()
-
-    async def fill(self, selector: str, value: str, *, force: bool = False) -> str:
-        loc = self.page.locator(selector).first
-        if force:
-            await loc.evaluate(f'el => el.value = {json.dumps(value)}')
-        else:
-            await loc.fill(value)
-        return f"filled {selector}"
-
-    async def click(self, selector: str, *, force: bool = False) -> str:
-        await self.page.locator(selector).first.click(force=force)
-        await self.page.wait_for_timeout(1000)
-        return f"clicked {selector}"
-
-    async def select(self, selector: str, value: str) -> str:
-        await self.page.select_option(selector, value)
-        return f"selected {value}"
-
-    async def screenshot(self, full_page: bool = False) -> str:
-        return base64.b64encode(await self.page.screenshot(full_page=full_page)).decode()
-
     async def screenshot_bytes(self, full_page: bool = False) -> bytes:
         return await self.page.screenshot(full_page=full_page)
 
     async def evaluate(self, js: str) -> Any:
         return await self.page.evaluate(js)
-
-    async def wait(self, ms: int = 2000) -> None:
-        await self.page.wait_for_timeout(ms)
 
     # ── BFS domain ────────────────────────────────────────────────────
 
@@ -379,52 +484,9 @@ class BFSBrowser:
         await self.page.locator(room["submitSelector"]).click(force=True)
         await self.page.wait_for_timeout(3000)
         txt = await self.text("#row-content")
-        ok = any(k in txt.lower() for k in ["accepted", "placed", "принята", "успешно", "thank you", "спасибо"])
+        ok = any(k in txt.lower() for k in ["accepted", "placed", "thank you"])
         return {"success": ok, "room": room["label"], "stake": stake or room["currentStake"],
                 "selections": selections, "page_text": txt[:800]}
-
-    async def forms(self) -> list[dict]:
-        return await self.page.evaluate("""()=>
-            Array.from(document.forms).map(f=>({
-                id:f.id||null,action:f.action,method:f.method,
-                fields:Array.from(f.elements).filter(e=>e.name).map(e=>({
-                    name:e.name,type:e.type,value:(e.value||'').substring(0,50),
-                    visible:e.offsetParent!==null,
-                    options:e.tagName==='SELECT'?Array.from(e.options).slice(0,10).map(o=>o.value):undefined
-                }))
-            })).filter(f=>f.fields.length)
-        """)
-
-    async def links(self, pattern: str = "") -> list[dict]:
-        return await self.page.evaluate(f"""()=>{{
-            const p="{pattern}";
-            return Array.from(document.querySelectorAll('a[href]'))
-                .map(a=>({{href:a.getAttribute('href'),text:a.textContent.trim().replace(/\\s+/g,' ').substring(0,80)}}))
-                .filter(l=>l.href&&!l.href.startsWith('/static')&&(!p||l.href.includes(p)))
-                .filter((v,i,a)=>a.findIndex(x=>x.href===v.href)===i).slice(0,50);
-        }}""")
-
-    async def bet_history(self) -> dict[str, Any]:
-        """Scrape bet history table and return as structured data + CSV."""
-        await self.goto("/user/bets/archive")
-        await self.page.wait_for_timeout(3000)
-
-        data = await self.page.evaluate("""() => {
-            const table = document.querySelector('#row-content table, .dataTable, table');
-            if (!table) return {rows: [], csv: '', error: 'no table found'};
-            const rawH = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
-            const headers = rawH.filter(h => h);
-            const rows = [];
-            table.querySelectorAll('tbody tr').forEach(tr => {
-                const rawCells = Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim().replace(/\\s+/g, ' '));
-                const cells = rawCells.filter(c => c);
-                if (cells.length) rows.push(cells);
-            });
-            let csv = headers.join(',') + '\\n';
-            rows.forEach(r => csv += r.map(c => '"' + c.replace(/"/g, '""') + '"').join(',') + '\\n');
-            return {headers, rows, csv, count: rows.length};
-        }""")
-        return data
 
     async def account_info(self) -> dict[str, Any]:
         """Get full account details."""
