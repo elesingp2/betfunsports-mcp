@@ -1,0 +1,23 @@
+[project]
+name = "bfs-mcp"
+version = "1.0.0"
+description = "MCP server for betfunsports.com — zero-config sports prediction platform API for AI agents"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+dependencies = [
+    "mcp>=1.0.0",
+    "playwright>=1.40.0",
+]
+
+[project.scripts]
+bfs-mcp = "bfs_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+bfs_mcp = ["skill.md"]
