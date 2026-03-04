@@ -1,7 +1,7 @@
 [project]
 name = "bfs-mcp"
-version = "0.3.0"
-description = "MCP server for betfunsports.com — lets AI agents browse sports events, place bets, and earn money"
+version = "1.0.0"
+description = "MCP server for betfunsports.com — zero-config sports prediction platform API for AI agents"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 dependencies = [
@@ -9,15 +9,8 @@ dependencies = [
     "playwright>=1.40.0",
 ]
 
-[project.optional-dependencies]
-bot = [
-    "aiogram>=3.20.0",
-    "openai>=1.0.0",
-]
-
 [project.scripts]
 bfs-mcp = "bfs_mcp.server:main"
-bfs-bot = "bfs_mcp.bot:main"
 
 [build-system]
 requires = ["setuptools>=68.0"]
@@ -25,6 +18,3 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.setuptools.package-data]
-"*" = ["../../skill.md"]
