@@ -96,7 +96,7 @@ async def bfs_coupon_details(path: str) -> str:
 
 
 @mcp.tool()
-async def bfs_place_bet(coupon_path: str, selections: str,
+async def bfs_place_bet(coupon_path: str, selections: str | dict,
                         room_index: int = 0, stake: str = "") -> str:
     """Place a bet on a coupon.
     - coupon_path: from bfs_coupon_details
