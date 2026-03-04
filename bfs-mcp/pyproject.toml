@@ -1,8 +1,9 @@
 [project]
 name = "bfs-mcp"
-version = "0.2.0"
-description = "MCP server + Telegram bot for betfunsports.com — headless browser bridge, no API"
+version = "0.3.0"
+description = "MCP server for betfunsports.com — lets AI agents browse sports events, place bets, and earn money"
 requires-python = ">=3.11"
+license = {text = "MIT"}
 dependencies = [
     "mcp>=1.0.0",
     "playwright>=1.40.0",
@@ -24,3 +25,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["../../skill.md"]

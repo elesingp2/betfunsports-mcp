@@ -1,128 +1,177 @@
-# Betfunsports — Autonomous Earning Skill
+# Betfunsports — Agent Skill
 
-You have access to the Betfunsports platform API (`bfs` MCP server). Use it to place sports predictions and earn money.
+You have access to the Betfunsports platform via the `bfs` MCP server.
+Use the tools below to register accounts, authenticate, browse sports events, place bets, and analyze results.
 
 ## What is Betfunsports
 
-A P2P sports prediction platform. Players' bets form a prize pool that is **fully distributed** among winners. There is no house edge — you compete only against other players.
+A P2P sports prediction platform. Players' bets form a prize pool that is **fully distributed** among winners — there is no house edge.
 
-**Key economics:**
-- **Top 50% of predictions win** (ranked by accuracy, 0–100 points)
-- Winnings = accuracy × bet size (minimum coefficient **1.3**)
-- Predictions scoring **100 points always win**, even if more than 50% get them
-- The pool is **100% distributed** — the platform only takes a commission fee on entry
+- **Top 50% of predictions win**, ranked by accuracy (0–100 points)
+- Winnings are proportional to accuracy × bet size (minimum coefficient **1.3**)
+- Predictions scoring **100 points always win**, even if more than 50% achieve them
+- The pool is **100% distributed** — the platform takes a commission fee on entry only
+- Bets and commission are refunded if: only one bet was placed, all bets scored 100, or the event was cancelled
 
-## Rooms (tables)
+### Ranking rules
 
-| Room | Index | Currency | Bet range | Commission | Use case |
-|------|-------|----------|-----------|------------|----------|
-| **Wooden** | 0 | BFS (virtual) | 1–10 | 0% | Testing / learning |
-| **Bronze** | 1 | EUR | 1–5 | 10% | Low-risk earning |
-| **Silver** | 2 | EUR | 10–50 | 7.5% | Mid-tier earning |
-| **Golden** | 3 | EUR | 100–500 | 5% | High-stakes |
+Bets are ranked by three criteria in order:
+1. **Accuracy** (descending) — higher score = higher rank
+2. **Bet size** (descending) — larger bet wins ties
+3. **Time** (ascending) — earlier bet wins ties
 
-## How to earn
+## Rooms
 
-### Strategy
-1. **Start on Wooden** (free) — learn the scoring system, test prediction accuracy
-2. **Export bet history** with `bfs_bet_history` — analyze which sports/coupon types give you highest accuracy
-3. **Move to Silver/Golden** once your average accuracy is consistently above the pool median
-4. Focus on events where you have an **information edge** — accuracy is everything
-5. **Accuracy ranking**: 100-point forecasts always win, 0-point always lose. The tiebreaker is bet size, then time
+| Room | Index | Currency | Range | Fee | Use case |
+|------|-------|----------|-------|-----|----------|
+| **Wooden** | 0 | BFS (virtual) | 1–10 | 0% | Free practice |
+| **Bronze** | 1 | EUR | 1–5 | 10% | Low stakes |
+| **Silver** | 2 | EUR | 10–50 | 7.5% | Mid-tier |
+| **Golden** | 3 | EUR | 100–500 | 5% | High stakes |
 
-### Coupon types
-- **1X2** — predict match outcome (home/draw/away). Simplest, good for football
-- **Score** — predict exact score. Harder but higher accuracy differential
-- **Goal Difference** — predict score margin. Good middle ground
-- Other: Match Winner, Playoff outcomes, Set scores (tennis), etc.
+New accounts receive **100 free BFS** for Wooden room betting.
 
-### 1X2 outcome codes
+## Sports and coupon types
+
+**Sports:** Football, Tennis, Hockey, Basketball, Formula 1, Biathlon, Volleyball, Boxing, MMA.
+
+### Football
+| Coupon type | What to predict |
+|-------------|----------------|
+| **1X2 (Match outcome)** | 1 = home, X = draw, 2 = away (main time only for playoffs) |
+| **Match Winner** | Playoff only — winner including extra time / penalties |
+| **Goal Difference** | Margin: ≥3 / 2 / 1 home, draw, 1 / 2 / ≥3 away |
+| **Correct Score** | Exact score after main + stoppage time |
+| **Score + Half** | Correct match score + correct first half score |
+
+### Tennis
+| Coupon type | What to predict |
+|-------------|----------------|
+| **Match Score** | Set score (e.g. 2-0, 2-1 for best-of-3) |
+| **Match Winner** | Who wins the match |
+| **Set Score** | Score within a set |
+| **Game Score / Winner** | Score or winner of a game |
+
+### Hockey
+| Coupon type | What to predict |
+|-------------|----------------|
+| **Match outcome** | Home/away win in regular time, overtime, or shootouts (6 options) |
+| **Outcome+** | Outcome + goal margin range (8 options) |
+| **Goal Difference** | Score difference in regular time (up to ±5 goals) |
+
+### Basketball
+| Coupon type | What to predict |
+|-------------|----------------|
+| **Match outcome** | Home/away win in regular time or overtime (4 options) |
+| **Points Difference** | Win margin range: 1-6 / 7-12 / >12 for each side |
+| **Exact Difference** | Exact point margin |
+
+### Formula 1
+Top three finishers, race winner, or team placements (top 10).
+
+### Biathlon
+Race winner, winning team, podium finishers.
+
+### Volleyball
+Match score by sets, or game score within a set.
+
+## 1X2 outcome codes
+
+For 1X2 coupons, use these codes when calling `bfs_place_bet`:
 - `"8"` → **1** (home win)
 - `"9"` → **X** (draw)
 - `"10"` → **2** (away win)
 
-## Onboarding (new user)
+## Accuracy scoring
 
-```
-1. bfs_register(                              → create account
-     username="sportsfan",
-     email="user@mail.com",
-     password="MyPass@2026!",                  ← min 8 chars, mixed
-     first_name="John", last_name="Doe",
-     birth_date="15/06/1995",                  ← DD/MM/YYYY
-     phone="+1234567890",
-     country_code="US"
-   )
-   → New account gets 100 free BFS
-2. bfs_login(email, password)                 → authenticate
-```
+- 100 points = perfect prediction (exact match)
+- 0 points = worst possible prediction
+- Points scale linearly or exponentially based on how close you were
+- For multi-event coupons: final score = arithmetic mean of individual scores
+- Each coupon type has its own scoring table — check via "Coupon Rules" on the site
 
-## Complete betting workflow
+## Tools reference
 
-```
-1. bfs_auth_status()                          → check if logged in
-2. bfs_login(email, password)                 → authenticate
-3. bfs_coupons()                              → list available coupons
-4. bfs_coupon_details("/FOOTBALL/.../18638")  → get events + rooms
-5. bfs_place_bet(                             → place bet
-     coupon_path="/FOOTBALL/.../18638",
-     selections={"19852": "8"},                ← eventId: outcomeCode
-     room_index=2,                             ← Silver
-     stake="10"                                ← 10 EUR
-   )
-6. bfs_auth_status()                          → verify balance change
-```
+### Registration and auth
 
-## Monitoring & Analytics
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `bfs_register` | `username`, `email`, `password`, `first_name`, `last_name`, `birth_date` (DD/MM/YYYY), `phone`, `country_code` (ISO-2, default "US"), `city`, `address`, `zip_code` | Register new account. Password: min 8 chars, mixed case+numbers+symbols. After registration, user must confirm email via link. Gets 100 free BFS. |
+| `bfs_confirm_registration` | `confirmation_url` | Activate account by visiting the confirmation link from email |
+| `bfs_login` | `email`, `password` | Authenticate. Returns balances. Error if "Player already logged in" elsewhere. |
+| `bfs_logout` | — | End session |
+| `bfs_auth_status` | — | Check auth + balances (EUR, BFS, in-game) |
 
-```
-# Active positions (pending results)
-bfs_active_bets()        → CSV: ID, Coupon, Date, Stake (unresolved bets)
+### Betting
 
-# Full history (for analysis)
-bfs_bet_history()        → CSV: ID, Coupon, Date, Stake, Points, Winning
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `bfs_coupons` | — | List available coupons → `[{path, label}]` |
+| `bfs_coupon_details` | `path` (e.g. `/FOOTBALL/spainPrimeraDivision/18638`) | Get events, outcomes, rooms, stakes. **Always call before placing a bet.** |
+| `bfs_place_bet` | `coupon_path`, `selections` (JSON `{"eventId": "outcomeCode"}`), `room_index` (0-3), `stake` | Place a bet. |
 
-# Strategy analysis loop:
-1. Export history
-2. Calculate average accuracy by sport/coupon type
-3. Identify where accuracy is consistently in top 50%
-4. Focus future bets on those segments
-5. Move from Wooden → Bronze → Silver as confidence grows
-```
+### Monitoring
 
-## Available tools
-
-### Platform API (primary)
-| Tool | Description |
-|------|-------------|
-| `bfs_register(...)` | Register new account (gets 100 free BFS) |
-| `bfs_login(email, password)` | Authenticate, get balances |
-| `bfs_logout()` | End session |
-| `bfs_auth_status()` | Check auth + EUR/BFS balances |
-| `bfs_active_bets()` | Active positions (pending results) |
-| `bfs_coupons()` | List available coupons [{path, label}] |
-| `bfs_coupon_details(path)` | Events, outcomes, rooms for a coupon |
-| `bfs_place_bet(...)` | Place a bet (see workflow above) |
-| `bfs_bet_history()` | Export bet history as CSV |
-| `bfs_account()` | Account details |
-| `bfs_payment_methods()` | Deposit/withdrawal methods + fees |
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `bfs_active_bets` | — | Active (unresolved) bets awaiting results |
+| `bfs_bet_history` | — | Full bet history as CSV: ID, Coupon, Date, Stake, Points, Winning |
+| `bfs_account` | — | Account details |
+| `bfs_payment_methods` | — | Deposit/withdrawal methods and fees |
 
 ### Page tools (advanced)
-| Tool | Description |
-|------|-------------|
-| `page_open(url)` | Open a page |
-| `page_read(selector)` | Read page content |
-| `page_click(selector)` | Click element |
-| `page_fill(selector, value)` | Fill form field |
-| `page_select(selector, value)` | Select dropdown |
-| `page_screenshot()` | Visual snapshot |
-| `page_script(javascript)` | Run script for data extraction |
-| `page_forms()` | List forms on page |
-| `page_links(filter)` | List links |
 
-## Important notes
-- Always call `bfs_coupon_details` before `bfs_place_bet` — you need the exact eventId
-- If a coupon returns `"error": "betting closed"` — find another active coupon
-- After placing a bet, check `bfs_auth_status` to confirm balance change
-- BFS (Wooden room) is free virtual currency — perfect for testing strategies at zero risk
-- Commission is deducted from your account separately, not from the prize pool
+| Tool | Parameters | Description |
+|------|-----------|-------------|
+| `page_open` | `url` | Navigate to URL or path |
+| `page_read` | `selector` (default `#row-content`) | Read text content |
+| `page_click` | `selector` | Click element |
+| `page_fill` | `selector`, `value` | Fill form field |
+| `page_select` | `selector`, `value` | Select dropdown option |
+| `page_screenshot` | `full_page` (bool) | Visual snapshot (base64 PNG) |
+| `page_run_script` | `javascript` | Execute JS for data extraction |
+| `page_forms` | — | List forms on current page |
+| `page_links` | `filter_pattern` | List links (optional substring filter) |
+
+## Workflows
+
+### New user registration
+```
+1. bfs_register(username, email, password, first_name, last_name,
+                birth_date="DD/MM/YYYY", phone, country_code="US")
+   → returns needs_email_confirmation: true
+2. User clicks confirmation link in their email
+3. bfs_confirm_registration(confirmation_url)   — if you have the link
+4. bfs_login(email, password)
+```
+
+### Betting flow
+```
+1. bfs_auth_status()                            → check if logged in
+2. bfs_login(email, password)                   → authenticate if needed
+3. bfs_coupons()                                → browse available coupons
+4. bfs_coupon_details("/FOOTBALL/.../18638")    → get events + outcomes + rooms
+5. bfs_place_bet(                               → place the bet
+     coupon_path="/FOOTBALL/.../18638",
+     selections='{"19852": "8"}',                ← eventId: outcomeCode
+     room_index=0,                               ← Wooden (free)
+     stake="5"
+   )
+6. bfs_auth_status()                            → verify balance changed
+```
+
+### Strategy optimization
+```
+1. bfs_bet_history()                            → export CSV
+2. Analyze: average accuracy by sport / coupon type
+3. Focus on segments where accuracy is consistently in top 50%
+4. Progress: Wooden → Bronze → Silver → Golden as confidence grows
+```
+
+## Key rules
+
+- **Always** call `bfs_coupon_details` before `bfs_place_bet` — you need the exact eventId and outcomeCode
+- If a coupon returns `"error": "betting closed"` — the event has already started, pick another coupon
+- If login returns "Player already logged in" — user must log out from their other session first
+- Commission is charged separately from the bet, not deducted from the prize pool
+- BFS (Wooden room) is free virtual currency — zero-risk strategy testing

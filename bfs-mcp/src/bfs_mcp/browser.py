@@ -128,7 +128,18 @@ class BFSBrowser:
         if s.authenticated:
             return {**s.to_dict(), "message": "already logged in"}
 
-        # Fill visible + hidden form fields, then submit with navigation wait
+        result = await self._submit_login(email, password)
+
+        # Auto-retry: if "player already logged in", logout and try again
+        if not result.get("authenticated") and "already logged" in result.get("error", "").lower():
+            log.info("session conflict — logging out and retrying")
+            await self.logout()
+            await self.goto("/")
+            result = await self._submit_login(email, password)
+
+        return result
+
+    async def _submit_login(self, email: str, password: str) -> dict[str, Any]:
         await self.page.evaluate(
             """([e, p]) => {
                 for (const c of document.querySelectorAll('#login_form')) {
@@ -162,24 +173,32 @@ class BFSBrowser:
         except Exception:
             pass
 
-        await self.page.wait_for_timeout(2000)
+        await self.page.wait_for_timeout(3000)
 
-        flash = ""
+        error = ""
         try:
-            flash = await self.page.evaluate("""() => {
-                const c = document.cookie;
-                const m = c.match(/PLAY_FLASH=([^;]+)/);
-                return m ? decodeURIComponent(m[1]) : '';
+            error = await self.page.evaluate("""() => {
+                const body = (document.body.textContent || '').replace(/\\s+/g, ' ');
+                if (/player already logged/i.test(body)) return 'Player already logged in';
+                if (/login failed/i.test(body)) return 'Login failed';
+                const flash = (document.cookie.match(/PLAY_FLASH=([^;]+)/) || [])[1];
+                if (flash) return decodeURIComponent(flash);
+                const modal = document.querySelector('.modal.show, .modal-dialog, .alert-danger, .swal2-popup');
+                if (modal) {
+                    const t = modal.textContent.trim();
+                    if (t) return t.substring(0, 200);
+                }
+                return '';
             }""")
         except Exception:
-            log.warning("could not read flash cookie", exc_info=True)
+            log.warning("could not read login error", exc_info=True)
 
         await self._save_cookies()
         s = await self.state()
         result = s.to_dict()
-        if flash:
-            result["error"] = flash
-        if not s.authenticated and not flash:
+        if error:
+            result["error"] = error
+        if not s.authenticated and not error:
             result["error"] = "login failed — check credentials"
         return result
 

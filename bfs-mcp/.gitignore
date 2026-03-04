@@ -1,7 +1,11 @@
 __pycache__/
 *.pyc
+*.pyo
 *.egg-info/
 .eggs/
 dist/
 build/
 .env
+.bfs-mcp/
+*.png
+*.jpg
