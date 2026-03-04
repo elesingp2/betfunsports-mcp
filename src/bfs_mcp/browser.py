@@ -196,7 +196,7 @@ class BFSBrowser:
             const seen=new Set(), out=[];
             document.querySelectorAll('a[href]').forEach(a=>{
                 const h=a.getAttribute('href');
-                if(h&&h.startsWith('/')&&!h.startsWith('/static')&&!h.startsWith('/en/')&&!h.startsWith('/de/')&&!h.startsWith('/ru/')
+                if(h&&h.startsWith('/')&&!h.startsWith('/static')&&!h.startsWith('/en/')&&!h.startsWith('/de/')&&!h.startsWith('/ru/')&&!h.startsWith('/user/')&&!h.startsWith('/deposit/')&&!h.startsWith('/withdrawal/')
                   &&!['/','fullRegistration','recoverPassword','paymentmethods','profile','logout'].some(x=>h==='/'+x||h===x)
                   &&h.split('/').length>=3&&!seen.has(h)){
                     seen.add(h);
@@ -261,7 +261,7 @@ class BFSBrowser:
         await self.page.locator(room["submitSelector"]).click(force=True)
         await self.page.wait_for_timeout(3000)
         txt = await self.text("#row-content")
-        ok = any(k in txt.lower() for k in ["accepted", "placed", "принята", "успешно"])
+        ok = any(k in txt.lower() for k in ["accepted", "placed", "принята", "успешно", "thank you", "спасибо"])
         return {"success": ok, "room": room["label"], "stake": stake or room["currentStake"],
                 "selections": selections, "page_text": txt[:800]}
 
@@ -294,11 +294,13 @@ class BFSBrowser:
         data = await self.page.evaluate("""() => {
             const table = document.querySelector('#row-content table, .dataTable, table');
             if (!table) return {rows: [], csv: '', error: 'no table found'};
-            const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
+            const rawH = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
+            const headers = rawH.filter(h => h);
             const rows = [];
             table.querySelectorAll('tbody tr').forEach(tr => {
-                const cells = Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim().replace(/\\s+/g, ' '));
-                if (cells.length && cells.some(c => c)) rows.push(cells);
+                const rawCells = Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim().replace(/\\s+/g, ' '));
+                const cells = rawCells.filter(c => c);
+                if (cells.length) rows.push(cells);
             });
             let csv = headers.join(',') + '\\n';
             rows.forEach(r => csv += r.map(c => '"' + c.replace(/"/g, '""') + '"').join(',') + '\\n');
