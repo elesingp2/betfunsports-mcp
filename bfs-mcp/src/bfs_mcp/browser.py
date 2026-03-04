@@ -124,11 +124,11 @@ class BFSBrowser:
 
     async def login(self, email: str, password: str) -> dict[str, Any]:
         await self.goto("/")
-        # Check if already authenticated
         s = await self.state()
         if s.authenticated:
             return {**s.to_dict(), "message": "already logged in"}
 
+        # Fill visible + hidden form fields, then submit with navigation wait
         await self.page.evaluate(
             """([e, p]) => {
                 for (const c of document.querySelectorAll('#login_form')) {
@@ -137,20 +137,42 @@ class BFSBrowser:
                     if (!re||!rp) continue;
                     re.value=e; rp.value=p;
                     const f = c.querySelector('form.loginForm1');
-                    if (f) { f.querySelector('[name="email"]').value=e; f.querySelector('[name="password"]').value=p; f.submit(); return; }
+                    if (f) {
+                        const ei = f.querySelector('[name="email"]');
+                        const pi = f.querySelector('[name="password"]');
+                        if(ei) ei.value=e; if(pi) pi.value=p;
+                    }
                 }
             }""",
             [email, password],
         )
-        await self.page.wait_for_load_state("domcontentloaded")
+
+        try:
+            async with self.page.expect_navigation(wait_until="domcontentloaded", timeout=15_000):
+                await self.page.evaluate(
+                    """() => {
+                        for (const c of document.querySelectorAll('#login_form')) {
+                            if (c.offsetParent === null) continue;
+                            const f = c.querySelector('form.loginForm1');
+                            if (f) { f.submit(); return true; }
+                        }
+                        return false;
+                    }"""
+                )
+        except Exception:
+            pass
+
         await self.page.wait_for_timeout(2000)
 
-        # Check for flash error (e.g. "Player already logged in")
-        flash = await self.page.evaluate("""() => {
-            const c = document.cookie;
-            const m = c.match(/PLAY_FLASH=([^;]+)/);
-            return m ? decodeURIComponent(m[1]) : '';
-        }""")
+        flash = ""
+        try:
+            flash = await self.page.evaluate("""() => {
+                const c = document.cookie;
+                const m = c.match(/PLAY_FLASH=([^;]+)/);
+                return m ? decodeURIComponent(m[1]) : '';
+            }""")
+        except Exception:
+            log.warning("could not read flash cookie", exc_info=True)
 
         await self._save_cookies()
         s = await self.state()
