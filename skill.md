@@ -90,6 +90,21 @@ For 1X2 coupons, use these codes when calling `bfs_place_bet`:
 - For multi-event coupons: final score = arithmetic mean of individual scores
 - Each coupon type has its own scoring table — check via "Coupon Rules" on the site
 
+## Credential storage
+
+The MCP server does NOT store login credentials between sessions. To avoid re-entering them:
+
+**Cursor / Claude Desktop:** Store credentials in your MCP config or project rules so the agent always has access:
+```
+BFS account: email=user@example.com password=MyPass@2026!
+```
+
+**Telegram bot:** The bot remembers credentials within the conversation history. Just say "log in as user@example.com password" once per session.
+
+**Programmatic:** Set environment variables `BFS_EMAIL` and `BFS_PASSWORD` and have the agent read them.
+
+The agent should call `bfs_auth_status` first — if already authenticated (session cookies persist), no login is needed.
+
 ## Tools reference
 
 ### Registration and auth
@@ -98,9 +113,9 @@ For 1X2 coupons, use these codes when calling `bfs_place_bet`:
 |------|-----------|-------------|
 | `bfs_register` | `username`, `email`, `password`, `first_name`, `last_name`, `birth_date` (DD/MM/YYYY), `phone`, `country_code` (ISO-2, default "US"), `city`, `address`, `zip_code` | Register new account. Password: min 8 chars, mixed case+numbers+symbols. After registration, user must confirm email via link. Gets 100 free BFS. |
 | `bfs_confirm_registration` | `confirmation_url` | Activate account by visiting the confirmation link from email |
-| `bfs_login` | `email`, `password` | Authenticate. Returns balances. Error if "Player already logged in" elsewhere. |
+| `bfs_login` | `email`, `password` | Authenticate. Returns balances. Auto-retries if "Player already logged in". |
 | `bfs_logout` | — | End session |
-| `bfs_auth_status` | — | Check auth + balances (EUR, BFS, in-game) |
+| `bfs_auth_status` | — | Check auth + balances (EUR, BFS, in-game). **Call this first.** |
 
 ### Betting
 
@@ -114,24 +129,10 @@ For 1X2 coupons, use these codes when calling `bfs_place_bet`:
 
 | Tool | Parameters | Description |
 |------|-----------|-------------|
-| `bfs_active_bets` | — | Active (unresolved) bets awaiting results |
-| `bfs_bet_history` | — | Full bet history as CSV: ID, Coupon, Date, Stake, Points, Winning |
+| `bfs_active_bets` | — | Active (unresolved) bets awaiting results (formatted text) |
+| `bfs_bet_history` | — | Full bet history (formatted text): ID, Coupon, Date, Stake, Points, Winning |
 | `bfs_account` | — | Account details |
 | `bfs_payment_methods` | — | Deposit/withdrawal methods and fees |
-
-### Page tools (advanced)
-
-| Tool | Parameters | Description |
-|------|-----------|-------------|
-| `page_open` | `url` | Navigate to URL or path |
-| `page_read` | `selector` (default `#row-content`) | Read text content |
-| `page_click` | `selector` | Click element |
-| `page_fill` | `selector`, `value` | Fill form field |
-| `page_select` | `selector`, `value` | Select dropdown option |
-| `page_screenshot` | `full_page` (bool) | Visual snapshot (base64 PNG) |
-| `page_run_script` | `javascript` | Execute JS for data extraction |
-| `page_forms` | — | List forms on current page |
-| `page_links` | `filter_pattern` | List links (optional substring filter) |
 
 ## Workflows
 
@@ -162,7 +163,7 @@ For 1X2 coupons, use these codes when calling `bfs_place_bet`:
 
 ### Strategy optimization
 ```
-1. bfs_bet_history()                            → export CSV
+1. bfs_bet_history()                            → get full history
 2. Analyze: average accuracy by sport / coupon type
 3. Focus on segments where accuracy is consistently in top 50%
 4. Progress: Wooden → Bronze → Silver → Golden as confidence grows
@@ -172,6 +173,6 @@ For 1X2 coupons, use these codes when calling `bfs_place_bet`:
 
 - **Always** call `bfs_coupon_details` before `bfs_place_bet` — you need the exact eventId and outcomeCode
 - If a coupon returns `"error": "betting closed"` — the event has already started, pick another coupon
-- If login returns "Player already logged in" — user must log out from their other session first
+- If login returns "Player already logged in" — the system auto-retries after logout
 - Commission is charged separately from the bet, not deducted from the prize pool
 - BFS (Wooden room) is free virtual currency — zero-risk strategy testing

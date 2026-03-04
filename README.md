@@ -49,19 +49,9 @@ The agent automatically receives `skill.md` as MCP instructions — it knows the
 | `bfs_account` | Account details |
 | `bfs_payment_methods` | Deposit/withdrawal methods |
 
-### Page tools
+### Page tools (low-level)
 
-| Tool | Description |
-|------|-------------|
-| `page_open` | Navigate to URL |
-| `page_read` | Read page content |
-| `page_click` | Click element |
-| `page_fill` | Fill form field |
-| `page_select` | Select dropdown |
-| `page_screenshot` | Visual snapshot |
-| `page_run_script` | Execute JS |
-| `page_forms` | List forms |
-| `page_links` | List links |
+`page_open`, `page_read`, `page_click`, `page_fill`, `page_select`, `page_screenshot`, `page_run_script`, `page_forms`, `page_links` — for advanced automation when platform API tools aren't enough.
 
 ## Telegram Bot
 

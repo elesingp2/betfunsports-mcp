@@ -6,7 +6,7 @@ import json
 import logging
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Image
 
 from .browser import BFSBrowser
 
@@ -52,7 +52,8 @@ async def bfs_confirm_registration(confirmation_url: str) -> str:
 @mcp.tool()
 async def bfs_login(email: str, password: str) -> str:
     """Authenticate. Returns balances or error.
-    If 'Player already logged in' — the user must logout from their other session first."""
+    If 'Player already logged in' — auto-retries after logout.
+    Credentials are NOT stored — pass them each time or use bfs_auth_status to check session."""
     await _e()
     return _j(await _b.login(email, password))
 
@@ -108,17 +109,17 @@ async def bfs_place_bet(coupon_path: str, selections: str,
 @mcp.tool()
 async def bfs_active_bets() -> str:
     """Get currently active (unresolved) bets waiting for event results.
-    Returns CSV with: ID, Coupon, Date, Stake."""
+    Returns formatted text list."""
     await _e()
-    return _j(await _b.active_bets())
+    return await _b.active_bets()
 
 
 @mcp.tool()
 async def bfs_bet_history() -> str:
-    """Export bet history as CSV: ID, Coupon, Date, Stake, Points (accuracy), Winning.
-    Use for strategy analysis."""
+    """Get full bet history: ID, Coupon, Date, Stake, Points (accuracy), Winning.
+    Returns formatted text. Use for strategy analysis."""
     await _e()
-    return _j(await _b.bet_history())
+    return await _b.bet_history()
 
 
 @mcp.tool()
@@ -136,7 +137,7 @@ async def bfs_payment_methods() -> str:
     return (await _b.text("#row-content"))[:4000]
 
 
-# ── Page tools (advanced) ────────────────────────────────────────────
+# ── Page tools ───────────────────────────────────────────────────────
 
 @mcp.tool()
 async def page_open(url: str) -> str:
@@ -174,10 +175,10 @@ async def page_select(selector: str, value: str) -> str:
 
 
 @mcp.tool()
-async def page_screenshot(full_page: bool = False) -> str:
-    """Take a visual snapshot of the current page. Returns base64 PNG."""
+async def page_screenshot(full_page: bool = False) -> Image:
+    """Take a visual snapshot of the current page. Returns PNG image."""
     await _e()
-    return f"data:image/png;base64,{await _b.screenshot(full_page)}"
+    return Image(data=await _b.screenshot_bytes(full_page), format="png")
 
 
 @mcp.tool()
