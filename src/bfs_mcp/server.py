@@ -12,7 +12,7 @@ from .browser import BFSBrowser
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
 
-_SKILL = (Path(__file__).resolve().parent.parent.parent / "skill.md").read_text(encoding="utf-8")
+_SKILL = (Path(__file__).resolve().parent / "skill.md").read_text(encoding="utf-8")
 
 mcp = FastMCP("bfs", instructions=_SKILL)
 
