@@ -7,5 +7,3 @@ dist/
 build/
 .env
 .bfs-mcp/
-*.png
-*.jpg
