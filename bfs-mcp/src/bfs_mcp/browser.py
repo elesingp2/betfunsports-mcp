@@ -293,3 +293,154 @@ class BrowserManager:
 
             return {title, tables: tableData, forms, text};
         }""")
+
+    # ── betting helpers ───────────────────────────────────────────────
+
+    async def get_bet_info(self, path: str) -> dict[str, Any]:
+        """Parse a coupon page into a clean betting structure."""
+        await self.goto(path)
+        await self.page.wait_for_timeout(2000)
+
+        return await self.page.evaluate("""() => {
+            const title = document.title;
+            const content = document.querySelector('#row-content');
+            if (!content) return {title, error: 'No content', events: [], rooms: []};
+
+            const text = content.textContent.replace(/\\s+/g, ' ').trim();
+
+            // Detect if betting is closed
+            if (text.includes('Bets are not possible') || text.includes('event has begun'))
+                return {title, error: 'Betting closed', events: [], rooms: [], text: text.substring(0, 500)};
+
+            const form = document.querySelector('form.coupon-form');
+            if (!form) return {title, error: 'No bet form found', events: [], rooms: [], text: text.substring(0, 500)};
+
+            const couponId = form.action.match(/\\/save\\/(\\d+)/)?.[1] || '';
+
+            // Parse events (matches) from ololo checkboxes
+            const eventMap = {};
+            form.querySelectorAll('input.coupon-checkbox').forEach(cb => {
+                const m = cb.name.match(/ololo\\[(\\d+)\\]\\[(\\d+)\\]/);
+                if (!m) return;
+                const [_, eventId, outcomeCode] = m;
+                if (!eventMap[eventId]) eventMap[eventId] = {eventId, outcomes: []};
+                const labels = {8: '1 (home)', 9: 'X (draw)', 10: '2 (away)'};
+                eventMap[eventId].outcomes.push({
+                    code: outcomeCode,
+                    label: labels[outcomeCode] || outcomeCode,
+                    selector: `input.coupon-checkbox[name="ololo[${eventId}][${outcomeCode}]"]`,
+                    checked: cb.checked,
+                });
+            });
+
+            // Parse score inputs if present
+            form.querySelectorAll('input[name*="score"], input[name*="result"]').forEach(inp => {
+                const m = inp.name.match(/(\\d+)/);
+                if (m) {
+                    const eventId = m[1];
+                    if (!eventMap[eventId]) eventMap[eventId] = {eventId, outcomes: [], scoreInputs: []};
+                    if (!eventMap[eventId].scoreInputs) eventMap[eventId].scoreInputs = [];
+                    eventMap[eventId].scoreInputs.push({
+                        name: inp.name, selector: `input[name="${inp.name}"]`,
+                        placeholder: inp.placeholder, value: inp.value,
+                    });
+                }
+            });
+
+            // Try to get event names from the page
+            const eventNames = {};
+            content.querySelectorAll('[data-event-id], .event-name, .match-name, tr').forEach(el => {
+                const eid = el.dataset?.eventId;
+                if (eid) eventNames[eid] = el.textContent.trim().replace(/\\s+/g, ' ').substring(0, 100);
+            });
+
+            const events = Object.values(eventMap).map(ev => ({
+                ...ev,
+                name: eventNames[ev.eventId] || '',
+            }));
+
+            // Parse rooms (stake inputs + submit buttons)
+            const rooms = [];
+            const roomLabels = ['Wooden (TOT)', 'Bronze (EUR)', 'Silver (EUR)', 'Golden (EUR)'];
+            let roomIdx = 0;
+            form.querySelectorAll('input.stake-input').forEach(inp => {
+                const roomId = inp.id.replace('stake-', '');
+                rooms.push({
+                    roomId,
+                    label: roomLabels[roomIdx] || `Room ${roomIdx}`,
+                    stakeSelector: `#stake-${roomId}`,
+                    submitSelector: `input[name="pool-${roomId}"]`,
+                    currentStake: inp.value,
+                    min: inp.min || '',
+                    max: inp.max || '',
+                });
+                roomIdx++;
+            });
+
+            return {title, couponId, events, rooms, text: text.substring(0, 1500)};
+        }""")
+
+    async def place_bet(
+        self,
+        coupon_path: str,
+        selections: dict[str, str],
+        room_index: int = 0,
+        stake: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Place a bet on a coupon.
+
+        Args:
+            coupon_path: URL path like /FOOTBALL/spainPrimeraDivision/18638
+            selections: {eventId: outcomeCode} e.g. {"19852": "8"} for home win
+            room_index: 0=Wooden(TOT), 1=Bronze(EUR), 2=Silver(EUR), 3=Golden(EUR)
+            stake: bet amount (optional, uses default if not set)
+        """
+        info = await self.get_bet_info(coupon_path)
+
+        if info.get("error"):
+            return {"success": False, "error": info["error"]}
+
+        if not info.get("rooms"):
+            return {"success": False, "error": "No rooms found"}
+
+        if room_index >= len(info["rooms"]):
+            return {"success": False, "error": f"Room {room_index} not found, available: {len(info['rooms'])}"}
+
+        room = info["rooms"][room_index]
+
+        for event_id, outcome_code in selections.items():
+            selector = f'input.coupon-checkbox[name="ololo[{event_id}][{outcome_code}]"]'
+            await self.page.evaluate(f"""() => {{
+                const cb = document.querySelector('{selector}');
+                if (cb) {{ cb.checked = true; cb.dispatchEvent(new Event('change', {{bubbles: true}})); }}
+            }}""")
+
+        if stake:
+            await self.page.evaluate(f"""() => {{
+                const inp = document.querySelector('{room["stakeSelector"]}');
+                if (inp) {{ inp.value = '{stake}'; inp.dispatchEvent(new Event('change', {{bubbles: true}})); }}
+            }}""")
+
+        confirmation = await self.page.evaluate("""() => {
+            const rc = document.querySelector('.request_confirmation');
+            return rc ? rc.value : null;
+        }""")
+
+        await self.page.locator(room["submitSelector"]).click(force=True)
+        await self.page.wait_for_timeout(3000)
+
+        result_text = await self.get_text("#row-content")
+        new_url = self.page.url
+
+        success_keywords = ["accepted", "placed", "принята", "успешно", "bet was"]
+        is_success = any(kw in result_text.lower() for kw in success_keywords)
+
+        return {
+            "success": is_success,
+            "url": new_url,
+            "room": room["label"],
+            "stake": stake or room["currentStake"],
+            "selections": selections,
+            "page_text": result_text[:1000],
+        }

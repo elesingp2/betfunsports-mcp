@@ -238,26 +238,98 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "bfs_get_bet_info",
+            "description": "Parse a coupon page into structured betting info: events (matches), outcomes, rooms, stakes. Call this BEFORE placing a bet to understand the form.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Coupon path, e.g. /FOOTBALL/spainPrimeraDivision/18638"}
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "bfs_place_bet",
+            "description": "Place a bet on a coupon. Requires authentication. Steps: select outcomes for each event, choose room, set stake, submit.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "coupon_path": {"type": "string", "description": "e.g. /FOOTBALL/spainPrimeraDivision/18638"},
+                    "selections": {
+                        "type": "object",
+                        "description": "Map of eventId to outcomeCode. For 1X2: 8=home(1), 9=draw(X), 10=away(2). Example: {\"19852\": \"8\"} for home win.",
+                        "additionalProperties": {"type": "string"},
+                    },
+                    "room_index": {
+                        "type": "integer",
+                        "description": "0=Wooden(TOT/BFS), 1=Bronze(EUR), 2=Silver(EUR), 3=Golden(EUR). Default=0 (cheapest).",
+                        "default": 0,
+                    },
+                    "stake": {
+                        "type": "string",
+                        "description": "Bet amount. Optional, uses room default if not set.",
+                    },
+                },
+                "required": ["coupon_path", "selections"],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """Ты — AI-агент, управляющий сайтом betfunsports.com через headless браузер.
-У тебя есть набор инструментов для навигации, кликов, заполнения форм, скриншотов и т.д.
+У тебя есть набор инструментов для навигации, кликов, заполнения форм, скриншотов и размещения ставок.
 
 Сайт betfunsports.com — спортивный прогнозный клуб (P2P ставки на спорт).
 Виды спорта: футбол, теннис, хоккей, баскетбол, биатлон, F1, волейбол, бокс, MMA.
 
-Правила:
+## Как устроены ставки
+
+**Структура:**
+- Список купонов по спортам: /football/prizecoupons1X2, /football/prizecouponsScore и т.д.
+- Каждый купон — ссылка вида /FOOTBALL/prizecoupons1X2/18580
+- Внутри купона: матчи (events), комнаты (rooms), ставки (stakes)
+
+**Типы ставок:**
+- 1X2: выбор исхода матча (1=победа хозяев, X=ничья, 2=победа гостей)
+- Score: прогноз точного счёта
+- GD (Goal Difference): разница голов
+
+**Комнаты (rooms):**
+- Wooden Room (index=0): ставки в TOT/BFS, мин 1-10
+- Bronze Room (index=1): ставки в EUR, мин 1-5
+- Silver Room (index=2): ставки в EUR, мин 10-50
+- Golden Room (index=3): ставки в EUR, мин 100-500
+
+**Процесс размещения ставки:**
+1. Пользователь выбирает купон
+2. Вызови bfs_get_bet_info чтобы получить структуру: events, outcomes, rooms
+3. Покажи пользователю матчи и варианты
+4. Пользователь говорит свой прогноз
+5. Вызови bfs_place_bet с selections={eventId: outcomeCode}, room_index, stake
+
+**Коды исходов для 1X2:**
+- "8" = 1 (победа хозяев)
+- "9" = X (ничья)  
+- "10" = 2 (победа гостей)
+
+## Общие правила
+
 - Отвечай на русском
 - Будь кратким и полезным
-- После важных действий (навигация, клик, логин) делай скриншот
-- Если пользователь просит что-то посмотреть — сначала навигируй, потом извлеки текст и/или сделай скриншот
-- Для логина используй bfs_login (он обходит honeypot-защиту)
-- Если нужно заполнить форму — сначала вызови browser_forms чтобы увидеть поля
-- Можешь вызывать несколько инструментов последовательно
-- Страница регистрации: /fullRegistration
-- Формат даты рождения: DD/MM/YYYY
-- В форме регистрации видимые поля: oldUame (username), oail (email), password0 (пароль), password2 (подтверждение), firstName, lastName, fbirthDate, phone, countryCode (select), sex (radio)
-- Скрытые honeypot поля (username, email, password) заполняются автоматически JS перед сабмитом"""
+- После важных действий делай скриншот
+- Для логина используй bfs_login (обходит honeypot-защиту)
+- ВСЕГДА сначала проверяй bfs_state — залогинен ли пользователь
+- Перед ставкой ВСЕГДА вызывай bfs_get_bet_info чтобы получить актуальные eventId и roomId
+- Если пользователь не залогинен — попроси логин/пароль
+- Показывай баланс после ставки
+- Если купон закрыт ("Bets are not possible") — сообщи об этом
+- Можешь вызывать несколько инструментов последовательно (до 8 итераций)"""
 
 
 # ── tool execution ────────────────────────────────────────────────────
@@ -363,6 +435,20 @@ async def execute_tool(name: str, args: dict) -> tuple[str, bytes | None]:
         ms = args.get("ms", 2000)
         await bm.wait(ms)
         return f"Waited {ms}ms", None
+
+    elif name == "bfs_get_bet_info":
+        info = await bm.get_bet_info(args["path"])
+        return json.dumps(info, ensure_ascii=False)[:4000], None
+
+    elif name == "bfs_place_bet":
+        result = await bm.place_bet(
+            coupon_path=args["coupon_path"],
+            selections=args["selections"],
+            room_index=args.get("room_index", 0),
+            stake=args.get("stake"),
+        )
+        screenshot = base64.b64decode(await bm.screenshot())
+        return json.dumps(result, ensure_ascii=False)[:4000], screenshot
 
     return f"Unknown tool: {name}", None
 
