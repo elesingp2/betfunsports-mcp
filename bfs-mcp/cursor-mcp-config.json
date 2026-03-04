@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "bfs-browser": {
+      "command": "python3",
+      "args": ["-m", "bfs_mcp.server"],
+      "cwd": "/workspace/bfs-mcp/src",
+      "env": {
+        "PYTHONPATH": "/workspace/bfs-mcp/src"
+      }
+    }
+  }
+}
