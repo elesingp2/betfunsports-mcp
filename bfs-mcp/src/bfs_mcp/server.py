@@ -76,10 +76,20 @@ async def bfs_register(username: str, email: str, password: str,
     """Register a new account on betfunsports.com.
     birth_date format: DD/MM/YYYY. country_code: ISO 2-letter (US, DE, GB, etc.).
     Password: min 8 chars, mix of upper/lower/numbers/symbols.
+    City, address and zip_code are required by the form — if empty, placeholders are used.
+    After registration, user must confirm email via link sent to their inbox.
     New accounts get 100 free BFS for Wooden room betting."""
     await _e()
     return _j(await _b.register(username, email, password, first_name, last_name,
                                 birth_date, phone, country_code, city, address, zip_code))
+
+
+@mcp.tool()
+async def bfs_confirm_registration(confirmation_url: str) -> str:
+    """Activate a registered account by visiting the confirmation link from email.
+    Pass the full URL from the confirmation email (e.g. https://betfunsports.com/confirm/...)."""
+    await _e()
+    return _j(await _b.confirm_registration(confirmation_url))
 
 
 @mcp.tool()
