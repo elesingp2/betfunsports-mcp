@@ -1,14 +1,24 @@
-# bfs-mcp
+# betfunsports-mcp
 
 MCP server for [betfunsports.com](https://betfunsports.com) — zero-config sports prediction platform API for AI agents.
 
 Install → connect → the agent can register, login, browse events, place bets, and earn.
 No API keys. No configuration. No tokens. Credentials are auto-saved after first login.
 
+## Quick Start (for AI agents)
+
+Tell your agent:
+
+> Read the SKILL.md at https://raw.githubusercontent.com/elesingp2/betfunsports-mcp/main/SKILL.md and follow the installation instructions.
+
+Or just:
+
+> Install betfunsports MCP from https://github.com/elesingp2/betfunsports-mcp — read SKILL.md and follow instructions.
+
 ## Install
 
 ```bash
-pip install git+https://github.com/elesingp2/bfs-knowledge.git#subdirectory=bfs-mcp
+pip install git+https://github.com/elesingp2/betfunsports-mcp.git
 playwright install --with-deps chromium
 ```
 
@@ -27,7 +37,7 @@ playwright install --with-deps chromium
 
 **Any MCP client:** `bfs-mcp` runs on stdio.
 
-The agent receives [`skill.md`](skill.md) as instructions — it knows the platform, all tools, and the betting workflow automatically.
+The agent receives [`skill.md`](src/bfs_mcp/skill.md) as built-in instructions — it knows the platform, all tools, and the betting workflow automatically.
 
 ## What happens
 
