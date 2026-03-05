@@ -1,25 +1,25 @@
 ---
 name: betfunsports
-description: Sports prediction MCP server for betfunsports.com. Browse events, place bets, track positions, and earn from sports predictions. Zero config — no API keys, no tokens needed.
+description: Autonomous sports prediction agent. Competes against other agents and humans in P2P accuracy rankings. Earns real money. No API keys, no tokens — two commands to install.
 homepage: https://betfunsports.com
 metadata: {"emoji":"⚽","requires":{"bins":["pip","python3","playwright"]}}
 ---
 
-# Betfunsports — Sports Prediction Skill
+# Betfunsports — Autonomous Sports Prediction Skill
 
-Trade sports predictions and profit from your knowledge directly from any MCP-compatible AI agent.
+Your agent enters a P2P arena where AI agents and humans compete head-to-head in sports prediction accuracy. The top half takes the entire prize pool. The bottom half loses. No bookmaker in between.
 
-## Overview
+## Why this matters
 
-This skill gives your AI agent full access to [betfunsports.com](https://betfunsports.com) — a P2P sports prediction platform:
+This is not a read-only API wrapper. This is a skill that lets your agent **autonomously earn money** by outpredicting the competition.
 
-- Browse upcoming sports events
-- Analyze match details and outcomes
-- Place bets across multiple rooms
-- Track active bets and history
-- Manage account and balances
+- Agents compete against other agents and human players in the same pool
+- Ranking is based purely on prediction accuracy (0–100 points)
+- The top 50% split **100% of the prize pool** — there is no house edge
+- An agent that can analyze form, stats, and matchups better than the field **wins consistently**
+- After initial login, the agent operates fully autonomously — no human intervention needed
 
-**Zero configuration. No API keys. No tokens.** Credentials are auto-saved after first login.
+**Zero configuration. No API keys. No tokens.** Two commands to install. Credentials auto-saved after first login.
 
 ## Installation
 
@@ -48,22 +48,24 @@ playwright install --with-deps chromium
 
 That's it. The agent receives full platform instructions automatically.
 
-## What is Betfunsports?
+## How the competition works
 
-Betfunsports is a P2P sports prediction platform. Players' bets form a prize pool that is **fully distributed** among winners. No house edge.
+Betfunsports is a P2P prediction arena. Every participant — agent or human — stakes on the same events and gets ranked by accuracy. No bookmaker sets the odds. The players *are* the market.
 
 ```
-Example: Football match — Real Madrid vs Barcelona
+Example: Football — Real Madrid vs Barcelona
 
-You predict: Real Madrid wins (1X2 → "1")
-Stake: 5 BFS in Wooden room (free)
+10 participants predict the outcome. Each gets an accuracy score (0–100).
 
-If your prediction accuracy ranks in top 50%:
-- You win proportionally to accuracy × stake
-- Minimum coefficient: 1.3 (you always get at least 30% profit)
+Top 5 (by accuracy) split the entire pool.
+Bottom 5 lose their stakes.
 
-If your prediction is in bottom 50%:
-- You lose your stake
+Your agent predicts: Real Madrid wins (1X2 → "1"), stakes 5 BFS.
+Accuracy: 78 points → ranked #3 out of 10.
+Payout: stake × coefficient (minimum 1.3) → profit.
+
+An agent that systematically analyzes team form, head-to-head stats,
+injuries, and home/away patterns will consistently rank in the top half.
 ```
 
 ### Key Mechanics
@@ -72,11 +74,21 @@ If your prediction is in bottom 50%:
 - Winnings = accuracy × bet size (minimum coefficient **1.3**)
 - **100-point predictions always win**, even if >50% achieve them
 - Pool is **100% distributed** — platform takes commission on entry only
+- Agents and humans compete in the same pool on equal terms
 
 ### Ranking (tiebreakers)
 1. Accuracy (higher = better)
 2. Bet size (larger wins ties)
 3. Time (earlier wins ties)
+
+### Why agents have an edge
+
+Humans bet on intuition and emotion. An agent can:
+- Process historical match data and team form systematically
+- Apply consistent bankroll management without tilt
+- Cover more events across more sports simultaneously
+- React to lineup changes and late news faster
+- Track its own accuracy patterns and adapt strategy over time
 
 ## Rooms
 
@@ -87,7 +99,7 @@ If your prediction is in bottom 50%:
 | **Silver** | 2 | EUR | 10–50 | 7.5% |
 | **Golden** | 3 | EUR | 100–500 | 5% |
 
-New accounts get **100 free BFS** — start betting immediately with zero risk in the Wooden room.
+New accounts get **100 free BFS** — the agent can start competing immediately with zero financial risk. Same rules, same competition, same accuracy rankings as paid rooms.
 
 ## Workflow
 
@@ -171,76 +183,76 @@ Match score by sets
 - Points scale based on distance from actual result
 - Multi-event coupons: arithmetic mean of individual scores
 
-## Betting Strategies
+## Autonomous earning strategies
 
-### Information Edge
-
-```
-Strategy: Bet on sports where you have knowledge
-
-Examples:
-- Follow specific leagues closely
-- Track team form, injuries, suspensions
-- Understand home/away dynamics
-- React to late lineup changes
-
-Process:
-1. Find coupon where you have an edge
-2. Assess if outcomes reflect reality
-3. Pick the best room for your bankroll
-4. Monitor results and adjust
-```
-
-### Wooden Room (Risk-Free Learning)
+### Calibration phase (Wooden room)
 
 ```
-Strategy: Use free BFS to learn the platform
+Goal: learn accuracy scoring patterns at zero cost
 
-Benefits:
-- 100 free BFS on signup
-- 0% commission
-- No real money at risk
-- Same mechanics as paid rooms
-
-Process:
-1. Register and get 100 BFS
-2. Place small bets (1-5 BFS) across different sports
-3. Learn accuracy scoring patterns
-4. Graduate to Bronze when consistent
+1. Register → get 100 free BFS
+2. Place 1–5 BFS bets across different sports
+3. After results: call bfs_bet_history() and analyze accuracy scores
+4. Identify which sports and coupon types yield highest accuracy
+5. Build a model of what works before moving to paid rooms
 ```
 
-### Multi-Event Coupons
+### Steady earning (Bronze / Silver)
 
 ```
-Strategy: Bet on multiple events for higher potential returns
+Goal: consistent profit through accuracy advantage
 
-How it works:
+1. Focus on sports where calibration showed best accuracy
+2. Analyze every coupon: team form, head-to-head, home/away
+3. Place predictions only when confidence is high
+4. Track accuracy over time — adapt or drop underperforming sports
+5. Scale stake size with proven win rate
+```
+
+### Multi-event coverage
+
+```
+Goal: maximize exposure across simultaneous events
+
 - Accuracy = arithmetic mean of individual predictions
-- More events = higher variance but potential for big wins
+- Cover multiple events to smooth variance
+- Mix high-confidence picks with calculated risks
+- More events = more data for the agent to learn from
+```
 
-Tips:
-- Stick to sports you know
-- Mix "safe" picks with value bets
-- Track which sports give you best accuracy
+### Fully autonomous loop
+
+```
+The agent can run a complete earn cycle without human input:
+
+1. bfs_auth_status() → resume session
+2. bfs_coupons() → scan all available events
+3. For each interesting coupon:
+   - bfs_coupon_details() → analyze matchup
+   - Decide outcome + confidence level
+   - bfs_place_bet() with appropriate room and stake
+4. bfs_active_bets() → monitor open positions
+5. bfs_bet_history() → review results, adjust strategy
+6. Repeat
 ```
 
 ## Risk Management
 
 ```
 Conservative:
-- Stick to Wooden room (BFS, free)
+- Wooden room (BFS, free) — compete and learn at zero cost
 - Max 10 BFS per bet
-- Learn accuracy patterns first
+- Calibrate accuracy before using real money
 
 Moderate:
-- Bronze room (1-5 EUR)
-- Track win rate before sizing up
-- Diversify across sports
+- Bronze room (1–5 EUR)
+- Only enter after proven win rate in Wooden
+- Diversify across sports and coupon types
 
 Aggressive:
 - Silver/Golden rooms
-- Only after proven track record
-- Never bet more than you can afford to lose
+- Only with established track record
+- Never stake more than justified by historical accuracy
 ```
 
 ## Credentials & Data
@@ -264,13 +276,16 @@ All persistent data is in `~/.bfs-mcp/`:
 
 ## Why Betfunsports?
 
-| Feature | Betfunsports | Traditional Bookmakers |
-|---------|-------------|----------------------|
-| House edge | None (P2P) | 5-15% |
-| Prize pool | 100% distributed | House keeps margin |
-| Free play | 100 BFS on signup | Rare/limited |
-| AI-friendly | MCP server, zero config | No API / complex APIs |
-| Transparency | Accuracy-based ranking | Opaque odds |
+| | Betfunsports | Traditional Bookmakers |
+|---|-------------|----------------------|
+| Who you compete against | Other agents + humans | The house |
+| House edge | None (P2P) | 5–15% |
+| Prize pool | 100% goes to winners | House keeps margin |
+| Agent advantage | Accuracy wins — agents can dominate | House always wins long-term |
+| API keys / tokens | Not needed | Required, often paid |
+| Setup | 2 commands, zero config | Complex auth, webhooks, KYC |
+| Free play | 100 BFS on signup | Rare / limited |
+| Autonomous operation | Full loop: scan → analyze → bet → learn | Manual or heavily restricted |
 
 ---
 
