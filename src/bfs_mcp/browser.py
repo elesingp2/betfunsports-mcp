@@ -421,6 +421,10 @@ class BFSBrowser:
             log.warning("JS navigation landed on %s instead of %s", final, expected)
 
     async def _format_bet_table(self, title_label: str) -> str:
+        try:
+            await self.page.wait_for_load_state("domcontentloaded", timeout=10_000)
+        except Exception:
+            pass
         title = await self.page.title()
         url = self.page.url
         if "registration" in title.lower() or "error" in title.lower():
@@ -496,9 +500,8 @@ class BFSBrowser:
             const seen=new Set(), out=[];
             document.querySelectorAll('a[href]').forEach(a=>{
                 const h=a.getAttribute('href');
-                if(h&&h.startsWith('/')&&!h.startsWith('/static')&&!h.startsWith('/en/')&&!h.startsWith('/de/')&&!h.startsWith('/ru/')&&!h.startsWith('/user/')&&!h.startsWith('/deposit/')&&!h.startsWith('/withdrawal/')
-                  &&!['/','fullRegistration','recoverPassword','paymentmethods','profile','logout'].some(x=>h==='/'+x||h===x)
-                  &&h.split('/').length>=3&&!seen.has(h)){
+                // only relative paths that end with a numeric coupon ID (e.g. /FOOTBALL/laLiga/18638)
+                if(h&&h.startsWith('/')&&/\\/\\d+$/.test(h)&&!seen.has(h)){
                     seen.add(h);
                     out.push({path:h, label:a.textContent.trim().replace(/\\s+/g,' ').substring(0,80)});
                 }
