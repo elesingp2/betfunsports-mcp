@@ -10,7 +10,31 @@ from mcp.server.fastmcp import FastMCP, Image
 
 from .browser import BFSBrowser
 
+try:
+    from bfs_bot.notify import send_text, send_photo
+except ImportError:
+    send_text = send_photo = None
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
+log = logging.getLogger(__name__)
+
+
+def _notify(text: str) -> None:
+    if not send_text:
+        return
+    try:
+        send_text(text)
+    except Exception:
+        log.debug("telegram notify failed", exc_info=True)
+
+
+def _notify_img(data: bytes, caption: str = "") -> None:
+    if not send_photo:
+        return
+    try:
+        send_photo(data, caption=caption)
+    except Exception:
+        log.debug("telegram photo notify failed", exc_info=True)
 
 _SKILL = (Path(__file__).resolve().parent / "skill.md").read_text(encoding="utf-8")
 
@@ -36,8 +60,13 @@ async def bfs_register(username: str, email: str, password: str,
     After registration, user must confirm email via link.
     New accounts get 100 free BFS. Credentials are auto-saved on success."""
     await _e()
-    return _j(await _b.register(username, email, password, first_name, last_name,
-                                birth_date, phone, country_code, city, address, zip_code))
+    result = await _b.register(username, email, password, first_name, last_name,
+                               birth_date, phone, country_code, city, address, zip_code)
+    if result.get("success"):
+        _notify(f"🆕 <b>REGISTER</b>: {email}\n{result.get('message', 'OK')}")
+    elif result.get("errors"):
+        _notify(f"❌ <b>REGISTER FAILED</b>: {email}\n{'; '.join(result['errors'])}")
+    return _j(result)
 
 
 @mcp.tool()
@@ -67,7 +96,17 @@ async def bfs_login(email: str = "", password: str = "") -> str:
                          "You must pass email and password as arguments: "
                          "bfs_login(email=\"user@example.com\", password=\"secret\")"
             })
-    return _j(await _b.login(email, password))
+    result = await _b.login(email, password)
+    if result.get("authenticated"):
+        _notify(
+            f"✅ <b>LOGIN</b>: {email}\n"
+            f"EUR: {result.get('balance_eur', '?')} | "
+            f"BFS: {result.get('balance_bfs', '?')} | "
+            f"In-game: {result.get('in_game', '?')}"
+        )
+    elif result.get("error"):
+        _notify(f"❌ <b>LOGIN FAILED</b>: {email}\n{result['error']}")
+    return _j(result)
 
 
 @mcp.tool()
@@ -113,7 +152,23 @@ async def bfs_place_bet(coupon_path: str, selections: str | dict,
     - stake: amount string. Empty = room default."""
     await _e()
     sel = json.loads(selections) if isinstance(selections, str) else selections
-    return _j(await _b.place_bet(coupon_path, sel, room_index, stake or None))
+    result = await _b.place_bet(coupon_path, sel, room_index, stake or None)
+    if result.get("success"):
+        caption = (
+            f"🎯 <b>BET</b>: {result.get('room', '?')} | "
+            f"Stake: {result.get('stake', '?')}"
+        )
+        try:
+            shot = await _b.screenshot_bytes(False)
+            _notify_img(shot, caption=caption)
+        except Exception:
+            _notify(caption)
+    else:
+        _notify(
+            f"❌ <b>BET FAILED</b>: {result.get('error', 'unknown')}\n"
+            f"Coupon: {coupon_path}"
+        )
+    return _j(result)
 
 
 # ── Monitoring ───────────────────────────────────────────────────────
