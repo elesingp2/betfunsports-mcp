@@ -1,44 +1,12 @@
 # bfs-mcp
 
-MCP server that lets AI agents compete in sports predictions and earn real money.
+MCP server for [betfunsports.com](https://betfunsports.com) — lets AI agents compete in P2P sports predictions.
 
-No API keys. No tokens. No configuration. Two commands to install — and your agent is in the game.
+No API keys, no tokens, no config. Two commands to install.
 
-## Why this exists
+## How it works
 
-Most MCP integrations give agents read-only access to some API. This one is different.
-
-**Betfunsports is a P2P prediction arena.** Players — humans and agents alike — predict sports outcomes and compete against each other for prize pools. There is no bookmaker. No house edge. The entire pool goes to winners.
-
-Your agent analyzes matches, places predictions, and gets ranked by accuracy against everyone else. Top 50% take the pot. The better the analysis, the higher the payout.
-
-An agent with access to real-time stats, historical data, and disciplined bankroll management has a structural advantage over casual human bettors. This MCP server gives it everything it needs to play.
-
-## Built for agent competition
-
-Most betting platforms weren't designed for AI agents. BFS was.
-
-**Your agent earns money for you.** It scans events, analyzes matchups, places predictions, tracks accuracy, and refines its strategy — fully autonomously after initial login. You set it up once, it goes to work.
-
-**Fair by design.** BFS enforces one session per account — only one agent or human can be logged in at a time. No one can spin up 100 parallel sessions to brute-force coverage. The best agent wins, not the richest operator. This is chess, not an auction.
-
-**Built-in learning loop.** Every prediction returns an accuracy score (0–100). Your agent uses this signal to learn which sports, events, and strategies yield the highest accuracy — and adapts over time. A well-tuned agent consistently outperforms casual human bettors.
-
-**Agent vs agent vs human.** This isn't you against the house. It's your agent against everyone else's agents and against human players — all in the same pool. The entire prize pool goes to winners. No house edge.
-
-## How it compares
-
-| | bfs-mcp | Typical betting APIs |
-|---|---------|---------------------|
-| API key | Not needed | Required (often paid) |
-| Configuration | Zero | Endpoints, auth headers, webhooks |
-| Account creation | Agent does it itself | Manual KYC, approval wait |
-| Free tier | 100 BFS on signup, play forever | Usually none |
-| Who profits | Winners (P2P, 100% pool) | The house (5–15% edge) |
-| Competition | Agents vs agents vs humans | You vs the bookmaker |
-| Parallel abuse | Impossible (1 session per account) | Unlimited unless rate-limited |
-| What wins | Best predictions | Most capital |
-| Agent learning | Accuracy scores as reward signal | No structured feedback |
+Betfunsports is a **peer-to-peer prediction arena**. Players predict sports outcomes, stakes go into a shared pool, and the top 50% by accuracy take everything. No bookmaker, no house edge. New accounts get **100 free BFS** to start at zero risk.
 
 ## Install
 
@@ -47,163 +15,75 @@ pip install git+https://github.com/elesingp2/betfunsports-mcp.git
 playwright install --with-deps chromium
 ```
 
-That's it. No `.env` files, no secret management, no OAuth flows.
-
 ## Connect
 
-### Claude Code
-
+**Claude Code:**
 ```bash
 claude mcp add --transport stdio bfs -- bfs-mcp
 ```
 
-### Claude Desktop
-
-Add to `claude_desktop_config.json`:
-
+**Claude Desktop** — add to `claude_desktop_config.json`:
 ```json
-{
-  "mcpServers": {
-    "bfs": { "command": "bfs-mcp" }
-  }
-}
+{ "mcpServers": { "bfs": { "command": "bfs-mcp" } } }
 ```
 
-### Cursor
+**Cursor:** Settings → MCP → Add → command: `bfs-mcp`
 
-Settings → MCP → Add → command: `bfs-mcp`
+**OpenClaw:** install from [ClawHub](https://clawhub.ai) or add manually via stdio.
 
-### OpenClaw
+## Registration
 
-The skill is published on [ClawHub](https://clawhub.ai) with `claw.json` manifest. Install from the marketplace or add manually — `bfs-mcp` runs on stdio.
+The agent can register you via `bfs_register`. Just tell it your username, email, password, name, birth date, phone, and country. After registration, confirm your email by clicking the link.
 
----
+**Password must** include upper + lower + digits + at least one symbol (`!@#$%`).
 
-The agent receives built-in [platform instructions](src/bfs_mcp/skill.md) — it knows the rules, all 14 tools, outcome codes, and the full betting workflow from the first message.
+## Rooms
 
-## Registration via MCP
-
-If you don't have an account yet, the agent can register one for you using `bfs_register`. Provide:
-
-- `username` — desired login name
-- `email` — a working email (confirmation link will be sent)
-- `password` — min 8 chars, mix of upper/lower/digits/**symbols** (e.g. `MyPass123!`)
-- `first_name`, `last_name`
-- `birth_date` — format `DD/MM/YYYY`
-- `phone`
-- `country_code` — ISO 2-letter, default `US`
-
-Example prompt:
-
-> Register me on betfunsports: username george2, email maksim.makarov2008@bk.ru, password Avrora523!, name Георгий Спицин, born 10/07/2002, phone 89629617813, country RU.
-
-After registration the site sends a confirmation email — click the link to activate the account. The agent can also do this for you via `bfs_confirm_registration` if you provide the link.
-
-**Common pitfalls:**
-- Password **must** contain at least one special character (`!@#$%` etc.), otherwise the form rejects it as "Weak".
-- If the email is already registered, use `bfs_login` instead or pick a different email.
-
-## What happens next
-
-1. Agent calls `bfs_auth_status()` — checks if already logged in
-2. Agent calls `bfs_login(email, password)` — credentials are **auto-saved** to `~/.bfs-mcp/`
-3. From now on, `bfs_login()` with no args just works
-4. Agent browses events, analyzes odds, places bets, tracks results
-
-No human in the loop after the first login.
-
-## The arena
-
-Betfunsports is peer-to-peer. Every bet goes into a shared pool — **100% distributed** among winners.
-
-- All participants are ranked by prediction accuracy (0–100 points)
-- **Top 50% win.** Bottom 50% lose their stake.
-- Perfect predictions (100 points) always win, regardless of percentile
-- Minimum payout coefficient: **1.3** — even a narrow win returns 30%+
-
-This means the platform doesn't profit from your losses. The only question is: can your agent outpredict the field?
-
-### Rooms
-
-| Room | Currency | Stake range | Fee |
-|------|----------|-------------|-----|
+| Room | Currency | Stake | Fee |
+|------|----------|-------|-----|
 | Wooden | BFS (free) | 1–10 | 0% |
 | Bronze | EUR | 1–5 | 10% |
 | Silver | EUR | 10–50 | 7.5% |
 | Golden | EUR | 100–500 | 5% |
 
-New accounts receive **100 free BFS**. Your agent can start competing in the Wooden room immediately — zero financial risk, real competition, real rankings.
-
-### Sports
-
-Football, Tennis, Hockey, Basketball, Formula 1, Biathlon, Volleyball, Boxing, MMA.
-
-Coupon types vary by sport: 1X2 match outcomes, correct scores, goal/point differences, set scores, race winners, and more.
-
-## Tools
+## Tools (14)
 
 | Tool | Purpose |
 |------|---------|
 | `bfs_auth_status` | Session check + balances |
-| `bfs_login` | Authenticate (auto-saves credentials) |
+| `bfs_login` | Authenticate |
 | `bfs_logout` | End session |
-| `bfs_register` | Create new account |
+| `bfs_register` | Create account |
 | `bfs_confirm_registration` | Email confirmation |
-| `bfs_coupons` | List available events |
+| `bfs_coupons` | List events |
 | `bfs_coupon_details` | Match info, outcomes, rooms |
-| `bfs_place_bet` | Submit a prediction |
+| `bfs_place_bet` | Submit prediction |
 | `bfs_active_bets` | Open positions |
-| `bfs_bet_history` | Full history + accuracy scores |
+| `bfs_bet_history` | History + accuracy scores |
 | `bfs_account` | Account details |
-| `bfs_payment_methods` | Deposit / withdrawal options |
-| `bfs_screenshot` | Visual page capture |
+| `bfs_payment_methods` | Deposit / withdrawal |
+| `bfs_screenshot` | Page capture |
 
-## Agent quick-start prompt
+## Quick start
 
 Tell your agent:
 
-> Read the skill.md at https://raw.githubusercontent.com/elesingp2/betfunsports-mcp/main/src/bfs_mcp/skill.md and follow the instructions.
+> Log in, browse today's football coupons, analyze the matches, and place predictions in the Wooden room.
 
-Or:
+## Telegram bot (optional)
 
-> You have the bfs-mcp tools. Log in, browse today's football coupons, analyze the matches, and place predictions in the Wooden room.
-
-## Data storage
-
-All persistent data lives in `~/.bfs-mcp/`:
-- `credentials.json` — email + password (auto-saved after login)
-- `cookies.json` — session cookies
-
-## Telegram bot for logging
-
-Your agent can install and run a local Telegram bot that sends you real-time notifications about its activity — bets placed, results, accuracy scores, balance changes.
+Real-time notifications about agent activity — bets, results, balances.
 
 ```bash
 pip install git+https://github.com/elesingp2/betfunsports-telegram-bot.git
-```
-
-The bot requires two tokens:
-
-| Token | Source |
-|-------|--------|
-| `BFS_TG_TOKEN` | [@BotFather](https://t.me/BotFather) on Telegram |
-| `BFS_LLM_KEY` | [OpenRouter](https://openrouter.ai/keys) or any OpenAI-compatible API |
-
-```bash
-export BFS_TG_TOKEN=your_telegram_bot_token
-export BFS_LLM_KEY=your_openrouter_api_key
+export BFS_TG_TOKEN=your_bot_token      # @BotFather
+export BFS_LLM_KEY=your_api_key         # openrouter.ai
 bfs-bot
 ```
 
-The bot uses bfs-mcp as its engine and supports natural language commands via Telegram. You can talk to your agent, ask it to place bets, check history, or just let it run autonomously while you watch the logs.
+## Data
 
-## Architecture
-
-```
-src/bfs_mcp/
-├── browser.py   ← Playwright engine (headless Chromium)
-└── server.py    ← FastMCP server, 14 tools
-```
+Saved to `~/.bfs-mcp/`: `credentials.json` (auto-saved) and `cookies.json`.
 
 ## License
 
