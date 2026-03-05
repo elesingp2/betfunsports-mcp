@@ -9,19 +9,20 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-_STATE_FILE = Path.home() / ".bfs-mcp" / "agent_state.json"
+_TG_CONFIG = Path.home() / ".bfs-mcp" / "telegram.json"
 
 
-def _save_state(email: str, balance_eur: str = "", balance_bfs: str = "") -> None:
+def _update_tg_config(email: str, balance_eur: str = "", balance_bfs: str = "") -> None:
     try:
-        _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _STATE_FILE.write_text(json.dumps({
-            "logged_in_as": email,
-            "balance_eur": balance_eur,
-            "balance_bfs": balance_bfs,
-        }))
+        config: dict = {}
+        if _TG_CONFIG.exists():
+            config = json.loads(_TG_CONFIG.read_text())
+        config["logged_in_as"] = email
+        config["balance_eur"] = balance_eur
+        config["balance_bfs"] = balance_bfs
+        _TG_CONFIG.write_text(json.dumps(config, indent=2))
     except Exception:
-        log.debug("state save failed", exc_info=True)
+        log.debug("tg config update failed", exc_info=True)
 
 try:
     from bfs_bot.notify import send_text, send_photo
@@ -58,7 +59,7 @@ def on_register(email: str, result: dict[str, Any]) -> None:
 
 def on_login(email: str, result: dict[str, Any]) -> None:
     if result.get("authenticated"):
-        _save_state(email, result.get("balance_eur", ""), result.get("balance_bfs", ""))
+        _update_tg_config(email, result.get("balance_eur", ""), result.get("balance_bfs", ""))
         _text(
             f"✅ <b>LOGIN</b>: {email}\n"
             f"EUR: {result.get('balance_eur', '?')} | "
