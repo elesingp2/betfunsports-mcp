@@ -49,16 +49,24 @@ async def bfs_confirm_registration(confirmation_url: str) -> str:
 
 @mcp.tool()
 async def bfs_login(email: str = "", password: str = "") -> str:
-    """Authenticate and get balances. Credentials are auto-saved on success.
-    If email/password are empty, uses previously saved credentials.
-    If 'Player already logged in' — auto-retries after logout."""
+    """Authenticate on betfunsports.com and get balances.
+    ALWAYS pass email and password when the user provides them.
+    Only omit both to reuse previously saved credentials.
+    Credentials are auto-saved on success.
+    If 'Player already logged in' — auto-retries with cookie-clear and backoff."""
     await _e()
+    email = (email or "").strip()
+    password = (password or "").strip()
     if not email or not password:
         creds = BFSBrowser.load_credentials()
         if creds:
             email, password = creds["email"], creds["password"]
         else:
-            return _j({"error": "No credentials provided and none saved. Pass email and password, or register first."})
+            return _j({
+                "error": "No saved credentials found. "
+                         "You must pass email and password as arguments: "
+                         "bfs_login(email=\"user@example.com\", password=\"secret\")"
+            })
     return _j(await _b.login(email, password))
 
 
