@@ -164,13 +164,34 @@ class BFSBrowser:
         result = await self._submit_login(email, password)
 
         if not result.get("authenticated") and "already logged" in result.get("error", "").lower():
-            log.info("session conflict — logging out and retrying")
-            await self.logout()
+            log.info("session conflict — clearing cookies and retrying")
+            if self._ctx:
+                await self._ctx.clear_cookies()
+            await self.goto("/logout")
+            await self.page.wait_for_timeout(2000)
             await self.goto("/")
             result = await self._submit_login(email, password)
 
+        if not result.get("authenticated") and "already logged" in result.get("error", "").lower():
+            log.info("session still blocked — retrying after wait")
+            await self.page.wait_for_timeout(5000)
+            if self._ctx:
+                await self._ctx.clear_cookies()
+            await self.goto("/")
+            result = await self._submit_login(email, password)
+
+        if not result.get("authenticated") and "already logged" in result.get("error", "").lower():
+            result["error"] = (
+                "Player already logged in from another session. "
+                "The server blocks concurrent logins for the same account. "
+                "Options: (1) wait a few minutes for the other session to expire and retry, "
+                "(2) logout from betfunsports.com in any other browser where this account is open, "
+                "(3) try bfs_auth_status() — if saved cookies are still valid, no login is needed."
+            )
+
         if result.get("authenticated"):
             self.save_credentials(email, password)
+            await self._save_cookies()
 
         return result
 
