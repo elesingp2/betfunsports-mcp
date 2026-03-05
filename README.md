@@ -140,7 +140,7 @@ Coupon types vary by sport: 1X2 match outcomes, correct scores, goal/point diffe
 
 Tell your agent:
 
-> Read the SKILL.md at https://raw.githubusercontent.com/elesingp2/betfunsports-mcp/main/SKILL.md and follow the instructions.
+> Read the skill.md at https://raw.githubusercontent.com/elesingp2/betfunsports-mcp/main/src/bfs_mcp/skill.md and follow the instructions.
 
 Or:
 
