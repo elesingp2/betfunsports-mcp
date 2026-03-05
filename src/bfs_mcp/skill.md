@@ -190,17 +190,6 @@ New accounts get **100 free BFS** — the agent can start competing immediately 
 2. **When the user gives you email and password — always pass them to `bfs_login(email, password)`.** Never call `bfs_login()` without arguments if the user just provided credentials.
 3. Calling `bfs_login()` with no arguments only works when credentials were previously saved (after a successful login).
 
-### "Player already logged in" error
-
-Betfunsports allows only **one active session per account**. If the account is already logged in from another browser (or from a previous MCP session that wasn't properly closed), the server blocks new logins.
-
-The MCP server handles this automatically: it clears cookies, retries after a short wait, and retries once more after a longer wait. If all retries fail, it returns an actionable error message.
-
-**If you still get this error**, tell the user:
-- Wait a few minutes for the old session to expire, then try `bfs_login()` again
-- Or logout from betfunsports.com in any other browser where this account is open
-- Or try `bfs_auth_status()` — saved cookies might still be valid and no login is needed
-
 ### Betting
 
 | Tool | Description |
@@ -394,6 +383,17 @@ Credentials are **auto-saved** to `~/.bfs-mcp/credentials.json` after successful
 All persistent data is in `~/.bfs-mcp/`:
 - `credentials.json` — email + password
 - `cookies.json` — browser session cookies (critical for session continuity)
+
+### "Player already logged in" error
+
+Betfunsports allows only **one active session per account**. If the account is already logged in from another browser (or from a previous MCP session that wasn't properly closed), the server blocks new logins.
+
+The MCP server handles this automatically: it clears cookies, retries after a short wait, and retries once more after a longer wait. If all retries fail, it returns an actionable error message.
+
+**If you still get this error**, tell the user:
+- Wait a few minutes for the old session to expire, then try `bfs_login()` again
+- Or logout from betfunsports.com in any other browser where this account is open
+- Or try `bfs_auth_status()` — saved cookies might still be valid and no login is needed
 
 ## Key Rules
 
