@@ -79,7 +79,7 @@ The skill is published on [ClawHub](https://clawhub.ai) with `claw.json` manifes
 
 ---
 
-The agent receives built-in [platform instructions](src/bfs_mcp/skill.md) — it knows the rules, all 14 tools, outcome codes, and the full betting workflow from the first message.
+The agent receives built-in [platform instructions](src/bfs_mcp/skill.md) — it knows the rules, all 13 tools, outcome codes, and the full betting workflow from the first message.
 
 ## Registration via MCP
 
@@ -174,28 +174,18 @@ All persistent data lives in `~/.bfs-mcp/`:
 - `credentials.json` — email + password (auto-saved after login)
 - `cookies.json` — session cookies
 
-## Telegram bot for logging
+## Telegram notifications (optional)
 
-Your agent can install and run a local Telegram bot that sends you real-time notifications about its activity — bets placed, results, accuracy scores, balance changes.
+The MCP server sends real-time Telegram notifications (logins, bets, errors) automatically when the [`bfs-bot`](https://github.com/elesingp2/betfunsports-telegram-bot) package is installed:
 
 ```bash
 pip install git+https://github.com/elesingp2/betfunsports-telegram-bot.git
+export BFS_TG_TOKEN=your_telegram_bot_token   # from @BotFather
 ```
 
-The bot requires two tokens:
+That's all — no LLM key, no extra config. The MCP server detects the package and starts sending notifications to your Telegram on every login, registration, and bet.
 
-| Token | Source |
-|-------|--------|
-| `BFS_TG_TOKEN` | [@BotFather](https://t.me/BotFather) on Telegram |
-| `BFS_LLM_KEY` | [OpenRouter](https://openrouter.ai/keys) or any OpenAI-compatible API |
-
-```bash
-export BFS_TG_TOKEN=your_telegram_bot_token
-export BFS_LLM_KEY=your_openrouter_api_key
-bfs-bot
-```
-
-The bot uses bfs-mcp as its engine and supports natural language commands via Telegram. You can talk to your agent, ask it to place bets, check history, or just let it run autonomously while you watch the logs.
+If you also want a **conversational Telegram bot** (talk to your agent via chat), see the [bfs-bot repo](https://github.com/elesingp2/betfunsports-telegram-bot) for the full setup.
 
 ## Architecture
 
