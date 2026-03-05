@@ -373,11 +373,11 @@ class BFSBrowser:
         data = await self.page.evaluate("""() => {
             const t = document.querySelector('#row-content table');
             if (!t) return {headers: [], rows: []};
-            const h = Array.from(t.querySelectorAll('thead th')).map(th=>th.textContent.trim()).filter(x=>x);
+            const h = Array.from(t.querySelectorAll('thead th')).map(th=>th.textContent.trim()||'-');
             const r = [];
             t.querySelectorAll('tbody tr').forEach(tr => {
-                const c = Array.from(tr.querySelectorAll('td')).map(td=>td.textContent.trim().replace(/\\s+/g,' ')).filter(x=>x);
-                if(c.length) r.push(c);
+                const c = Array.from(tr.querySelectorAll('td')).map(td=>td.textContent.trim().replace(/\\s+/g,' ')||'-');
+                if(c.some(x=>x!=='-')) r.push(c);
             });
             return {headers: h, rows: r};
         }""")
@@ -389,6 +389,8 @@ class BFSBrowser:
         for i, row in enumerate(rows, 1):
             parts = []
             for h, v in zip(headers, row):
+                if h == "-":
+                    continue
                 parts.append(f"{h}: {v}")
             lines.append(f"  {i}. " + " | ".join(parts))
         return "\n".join(lines)

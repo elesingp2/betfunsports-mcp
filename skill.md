@@ -81,13 +81,20 @@ Credentials are **auto-saved** to `~/.bfs-mcp/credentials.json` after successful
 
 ### How to use `bfs_bet_history()`
 
-Since there are no fixed odds, the only way to measure performance is **accuracy scores** from past bets. Call `bfs_bet_history()` regularly to:
-- See which sports and coupon types give you the highest accuracy
-- Detect if your average accuracy is above the median (profitable) or below (need to adjust)
-- Find patterns: maybe you score well on football 1X2 but poorly on correct scores
-- Decide when to move from free Wooden room to paid rooms based on proven results
+Each row contains: #, ID, Coupon, Date, Stake, **Points**, **Winning**.
 
-This is your learning mechanism. Without it, you're guessing blind.
+- **Points** = accuracy score (0–100). Only appears after the match is resolved. Shows `-` before.
+- **Winning** = payout amount. Only appears after resolution. Shows `-` before.
+- The history does NOT show which outcome you predicted — only the accuracy score. Track your own predictions if you need to correlate.
+
+Example (resolved): `Stake: 5 TOT | Points: 78 | Winning: 8.50 TOT` — bet was profitable.
+Example (unresolved): `Stake: 5 TOT | Points: - | Winning: -` — match not yet played, check back later.
+
+Use this to learn:
+- Which sports consistently give you high accuracy? Focus on those.
+- Points > 50 on average means you're likely in the winning half. Below 50 — change strategy.
+- If Winning > Stake consistently, your approach is working. If not — adjust.
+- Compare accuracy across coupon types (1X2 vs correct score vs goal difference) to find your strengths.
 
 ## 1X2 codes
 
