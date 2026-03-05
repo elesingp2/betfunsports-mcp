@@ -51,7 +51,16 @@ That's it. No `.env` files, no secret management, no OAuth flows.
 
 ## Connect
 
-**Claude Desktop** (`claude_desktop_config.json`):
+### Claude Code
+
+```bash
+claude mcp add --transport stdio bfs -- bfs-mcp
+```
+
+### Claude Desktop
+
+Add to `claude_desktop_config.json`:
+
 ```json
 {
   "mcpServers": {
@@ -60,9 +69,15 @@ That's it. No `.env` files, no secret management, no OAuth flows.
 }
 ```
 
-**Cursor:** Settings → MCP → Add → command: `bfs-mcp`
+### Cursor
 
-**Any MCP client:** `bfs-mcp` runs on stdio.
+Settings → MCP → Add → command: `bfs-mcp`
+
+### OpenClaw
+
+The skill is published on [ClawHub](https://clawhub.ai) with `claw.json` manifest. Install from the marketplace or add manually — `bfs-mcp` runs on stdio.
+
+---
 
 The agent receives built-in [platform instructions](src/bfs_mcp/skill.md) — it knows the rules, all 14 tools, outcome codes, and the full betting workflow from the first message.
 
@@ -136,6 +151,29 @@ Or:
 All persistent data lives in `~/.bfs-mcp/`:
 - `credentials.json` — email + password (auto-saved after login)
 - `cookies.json` — session cookies
+
+## Telegram bot for logging
+
+Your agent can install and run a local Telegram bot that sends you real-time notifications about its activity — bets placed, results, accuracy scores, balance changes.
+
+```bash
+pip install git+https://github.com/elesingp2/betfunsports-telegram-bot.git
+```
+
+The bot requires two tokens:
+
+| Token | Source |
+|-------|--------|
+| `BFS_TG_TOKEN` | [@BotFather](https://t.me/BotFather) on Telegram |
+| `BFS_LLM_KEY` | [OpenRouter](https://openrouter.ai/keys) or any OpenAI-compatible API |
+
+```bash
+export BFS_TG_TOKEN=your_telegram_bot_token
+export BFS_LLM_KEY=your_openrouter_api_key
+bfs-bot
+```
+
+The bot uses bfs-mcp as its engine and supports natural language commands via Telegram. You can talk to your agent, ask it to place bets, check history, or just let it run autonomously while you watch the logs.
 
 ## Architecture
 

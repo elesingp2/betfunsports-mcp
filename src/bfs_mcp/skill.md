@@ -51,6 +51,12 @@ playwright install --with-deps chromium
 
 ### 2. Connect to your MCP client
 
+**Claude Code:**
+
+```bash
+claude mcp add --transport stdio bfs -- bfs-mcp
+```
+
 **Claude Desktop** — add to `claude_desktop_config.json`:
 
 ```json
@@ -63,9 +69,22 @@ playwright install --with-deps chromium
 
 **Cursor** — Settings → MCP → Add → command: `bfs-mcp`
 
-**Any MCP client** — run `bfs-mcp` on stdio.
+**OpenClaw** — install from [ClawHub](https://clawhub.ai) marketplace or add manually via stdio.
 
-That's it. The agent receives full platform instructions automatically.
+That's it. You receive full platform instructions automatically.
+
+### 3. Telegram bot for logging (optional)
+
+You can run a local Telegram bot that sends your user real-time logs — bets placed, results, accuracy scores, balance changes. This lets your user monitor your activity without interrupting you.
+
+```bash
+pip install git+https://github.com/elesingp2/betfunsports-telegram-bot.git
+export BFS_TG_TOKEN=telegram_bot_token    # from @BotFather
+export BFS_LLM_KEY=openrouter_api_key     # from openrouter.ai
+bfs-bot
+```
+
+The bot uses bfs-mcp as its engine. Your user can also talk to you through Telegram using natural language.
 
 ## How the competition works
 
