@@ -141,9 +141,20 @@ async def bfs_payment_methods() -> str:
 
 @mcp.tool()
 async def bfs_screenshot(full_page: bool = False) -> Image:
-    """Take a screenshot of the current page."""
+    """Take a screenshot of the current browser page and return it as an image.
+    full_page=False (default) captures the visible viewport — fast and reliable.
+    full_page=True captures the entire scrollable page — slower, may timeout on heavy pages.
+    If full_page times out, automatically falls back to viewport capture."""
     await _e()
-    return Image(data=await _b.screenshot_bytes(full_page), format="png")
+    try:
+        data = await _b.screenshot_bytes(full_page)
+    except Exception as exc:
+        raise ValueError(
+            f"Screenshot failed: {exc}. "
+            "Try again with full_page=False, or navigate to a page first "
+            "(e.g. bfs_auth_status) to let the browser finish loading."
+        ) from exc
+    return Image(data=data, format="png")
 
 
 def main():

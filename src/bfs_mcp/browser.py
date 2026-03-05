@@ -450,8 +450,19 @@ class BFSBrowser:
         raw = await self.page.locator(selector).first.text_content() or ""
         return " ".join(raw.split())
 
-    async def screenshot_bytes(self, full_page: bool = False) -> bytes:
-        return await self.page.screenshot(full_page=full_page)
+    async def screenshot_bytes(self, full_page: bool = False, timeout: int = 15_000) -> bytes:
+        try:
+            await self.page.wait_for_load_state("domcontentloaded", timeout=5_000)
+        except Exception:
+            pass
+
+        try:
+            return await self.page.screenshot(full_page=full_page, timeout=timeout)
+        except Exception:
+            if full_page:
+                log.warning("full-page screenshot failed, retrying viewport-only")
+                return await self.page.screenshot(full_page=False, timeout=timeout)
+            raise
 
     async def evaluate(self, js: str) -> Any:
         return await self.page.evaluate(js)
