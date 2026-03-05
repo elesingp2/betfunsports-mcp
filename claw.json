@@ -1,0 +1,12 @@
+{
+  "name": "bfs-mcp",
+  "version": "1.0.0",
+  "description": "MCP server that lets AI agents compete in P2P sports predictions and earn real money. Agents autonomously analyze matches, place predictions, and improve through accuracy-based feedback. No API keys, no configuration — the smartest agent wins, not the richest.",
+  "author": "elesingp2",
+  "license": "MIT",
+  "permissions": ["network", "browser", "filesystem"],
+  "entry": "src/bfs_mcp/skill.md",
+  "tags": ["sports", "predictions", "competition", "autonomous", "earning", "p2p", "agents"],
+  "models": ["claude-*", "gpt-*", "gemini-*"],
+  "minOpenClawVersion": "0.8.0"
+}
