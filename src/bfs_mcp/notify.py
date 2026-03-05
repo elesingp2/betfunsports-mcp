@@ -2,10 +2,26 @@
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
 log = logging.getLogger(__name__)
+
+_STATE_FILE = Path.home() / ".bfs-mcp" / "agent_state.json"
+
+
+def _save_state(email: str, balance_eur: str = "", balance_bfs: str = "") -> None:
+    try:
+        _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _STATE_FILE.write_text(json.dumps({
+            "logged_in_as": email,
+            "balance_eur": balance_eur,
+            "balance_bfs": balance_bfs,
+        }))
+    except Exception:
+        log.debug("state save failed", exc_info=True)
 
 try:
     from bfs_bot.notify import send_text, send_photo
@@ -42,6 +58,7 @@ def on_register(email: str, result: dict[str, Any]) -> None:
 
 def on_login(email: str, result: dict[str, Any]) -> None:
     if result.get("authenticated"):
+        _save_state(email, result.get("balance_eur", ""), result.get("balance_bfs", ""))
         _text(
             f"✅ <b>LOGIN</b>: {email}\n"
             f"EUR: {result.get('balance_eur', '?')} | "
