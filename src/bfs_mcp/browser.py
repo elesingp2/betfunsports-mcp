@@ -117,8 +117,19 @@ class BFSBrowser:
 
     async def goto(self, path: str, *, timeout: int = 15_000) -> dict[str, Any]:
         url = path if path.startswith("http") else f"{BASE_URL}{path}"
-        resp = await self.page.goto(url, wait_until="domcontentloaded", timeout=timeout)
-        return {"url": self.page.url, "status": resp.status if resp else 0, "title": await self.page.title()}
+        try:
+            resp = await self.page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+            return {"url": self.page.url, "status": resp.status if resp else 0, "title": await self.page.title()}
+        except Exception as exc:
+            if "ERR_ABORTED" in str(exc):
+                log.warning("goto %s aborted (likely redirect) — waiting for page to settle", url)
+                try:
+                    await self.page.wait_for_load_state("domcontentloaded", timeout=timeout)
+                except Exception:
+                    pass
+                await self.page.wait_for_timeout(2000)
+                return {"url": self.page.url, "status": 0, "title": await self.page.title(), "warning": "ERR_ABORTED — page may have redirected"}
+            raise
 
     async def state(self) -> State:
         s = State(url=self.page.url, title=await self.page.title())
