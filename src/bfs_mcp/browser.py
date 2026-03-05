@@ -373,9 +373,31 @@ class BFSBrowser:
 
     async def active_bets(self) -> str:
         """Get currently active (unresolved) bets as formatted text."""
-        await self.goto("/user/bets")
-        await self.page.wait_for_timeout(3000)
+        await self._goto_user_page("/user/bets")
         return await self._format_bet_table("Active bets")
+
+    async def _goto_user_page(self, path: str) -> None:
+        """Navigate to a /user/* page, retrying via JS if page.goto gets aborted."""
+        target = f"{BASE_URL}{path}"
+        result = await self.goto(path)
+        current = self.page.url.rstrip("/")
+        expected = target.rstrip("/")
+
+        if current == expected:
+            await self.page.wait_for_timeout(2000)
+            return
+
+        log.warning("goto landed on %s instead of %s — retrying via JS", current, expected)
+        await self.page.evaluate(f"window.location.href = {json.dumps(target)}")
+        try:
+            await self.page.wait_for_load_state("domcontentloaded", timeout=15_000)
+        except Exception:
+            pass
+        await self.page.wait_for_timeout(3000)
+
+        final = self.page.url.rstrip("/")
+        if final != expected:
+            log.warning("JS navigation landed on %s instead of %s", final, expected)
 
     async def _format_bet_table(self, title_label: str) -> str:
         title = await self.page.title()
@@ -419,8 +441,7 @@ class BFSBrowser:
 
     async def bet_history(self) -> str:
         """Scrape bet history and return as formatted text."""
-        await self.goto("/user/bets/archive")
-        await self.page.wait_for_timeout(3000)
+        await self._goto_user_page("/user/bets/archive")
         return await self._format_bet_table("Bet history")
 
     # ── DOM helpers ───────────────────────────────────────────────────
