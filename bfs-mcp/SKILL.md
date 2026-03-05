@@ -164,17 +164,39 @@ New accounts get **100 free BFS** — the agent can start competing immediately 
 | `bfs_payment_methods()` | Deposit/withdrawal info |
 | `bfs_screenshot()` | Current page screenshot |
 
-### Why `bfs_bet_history()` is the most important monitoring tool
+### Why `bfs_bet_history()` matters
 
-Since there are no fixed odds, the only way to know how well the agent is performing is to look at **accuracy scores** from past bets. `bfs_bet_history()` returns every completed bet with the accuracy score the agent received.
+Since there are no fixed odds, the only way to know how well the agent is performing is through **accuracy scores** — and those only appear in bet history after a match is resolved.
+
+Each row returned by `bfs_bet_history()` contains:
+
+| Field | What it means |
+|-------|---------------|
+| **#** | Bet number (newest first) |
+| **ID** | Coupon ID |
+| **Coupon** | Match name + league |
+| **Date** | When the bet was placed |
+| **Stake** | Amount + currency (e.g. "5 TOT" for Wooden room, "3 EUR" for Bronze) |
+| **Points** | Accuracy score (0–100). **Empty (`-`) until the match is resolved.** |
+| **Winning** | Payout amount. **Empty (`-`) until the match is resolved.** |
+
+Example output (before resolution):
+```
+1. #: 1 | ID: 18638 | Coupon: Atlético Madrid - Celta de Vigo | Date: 05/03 01:05 | Stake: 5 TOT | Points: - | Winning: -
+```
+
+Example output (after resolution):
+```
+1. #: 1 | ID: 18638 | Coupon: Atlético Madrid - Celta de Vigo | Date: 05/03 01:05 | Stake: 5 TOT | Points: 78 | Winning: 8.50 TOT
+```
+
+**What the history does NOT show:** the specific outcome the agent predicted (e.g. "home win"). The agent only sees the accuracy score it received. To correlate predictions with scores, the agent should keep its own record of what it predicted.
 
 This is the agent's feedback loop:
-- **Which sports** consistently give the agent high accuracy? Focus on those.
-- **Which coupon types** (1X2, correct score, goal difference) work best? Double down on strengths.
-- **What's the average accuracy?** If it's consistently above the median, the agent is profitable. If not — change strategy.
-- **Are there patterns?** Maybe the agent is great at football but poor at tennis. Maybe home-win predictions score higher than draws.
-
-Without reviewing history, the agent is guessing blind. With it, the agent **learns and improves** over time — that's the core advantage over human players who rarely analyze their own track record systematically.
+- **Points** tells you how accurate the prediction was. Higher = better.
+- **Winning** tells you the payout. If Winning > Stake, the bet was profitable.
+- **Points: -** means the match hasn't been resolved yet — check back later.
+- Over time, the agent can see which sports and coupon types yield the highest accuracy and focus on those.
 
 ## 1X2 Outcome Codes
 
