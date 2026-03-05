@@ -93,10 +93,6 @@ If you don't have an account yet, the agent can register one for you using `bfs_
 - `phone`
 - `country_code` — ISO 2-letter, default `US`
 
-Example prompt:
-
-> Register me on betfunsports: username george2, email maksim.makarov2008@bk.ru, password Avrora523!, name Георгий Спицин, born 10/07/2002, phone 89629617813, country RU.
-
 After registration the site sends a confirmation email — click the link to activate the account. The agent can also do this for you via `bfs_confirm_registration` if you provide the link.
 
 **Common pitfalls:**
