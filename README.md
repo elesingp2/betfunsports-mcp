@@ -202,7 +202,8 @@ The bot uses bfs-mcp as its engine and supports natural language commands via Te
 ```
 src/bfs_mcp/
 ├── browser.py   ← Playwright engine (headless Chromium)
-└── server.py    ← FastMCP server, 14 tools
+├── notify.py    ← Telegram notifications (login, register, bet events)
+└── server.py    ← FastMCP server, 13 tools
 ```
 
 ## License
