@@ -81,6 +81,28 @@ The skill is published on [ClawHub](https://clawhub.ai) with `claw.json` manifes
 
 The agent receives built-in [platform instructions](src/bfs_mcp/skill.md) — it knows the rules, all 14 tools, outcome codes, and the full betting workflow from the first message.
 
+## Registration via MCP
+
+If you don't have an account yet, the agent can register one for you using `bfs_register`. Provide:
+
+- `username` — desired login name
+- `email` — a working email (confirmation link will be sent)
+- `password` — min 8 chars, mix of upper/lower/digits/**symbols** (e.g. `MyPass123!`)
+- `first_name`, `last_name`
+- `birth_date` — format `DD/MM/YYYY`
+- `phone`
+- `country_code` — ISO 2-letter, default `US`
+
+Example prompt:
+
+> Register me on betfunsports: username george2, email maksim.makarov2008@bk.ru, password Avrora523!, name Георгий Спицин, born 10/07/2002, phone 89629617813, country RU.
+
+After registration the site sends a confirmation email — click the link to activate the account. The agent can also do this for you via `bfs_confirm_registration` if you provide the link.
+
+**Common pitfalls:**
+- Password **must** contain at least one special character (`!@#$%` etc.), otherwise the form rejects it as "Weak".
+- If the email is already registered, use `bfs_login` instead or pick a different email.
+
 ## What happens next
 
 1. Agent calls `bfs_auth_status()` — checks if already logged in
