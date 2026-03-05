@@ -14,9 +14,24 @@ from . import notify
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-_SKILL = (Path(__file__).resolve().parent / "skill.md").read_text(encoding="utf-8")
 
-mcp = FastMCP("bfs", instructions=_SKILL)
+def _load_instructions() -> str:
+    """Load SKILL.md and strip YAML frontmatter."""
+    for candidate in [
+        Path(__file__).resolve().parent.parent.parent / "SKILL.md",
+        Path.cwd() / "SKILL.md",
+    ]:
+        if candidate.exists():
+            text = candidate.read_text(encoding="utf-8")
+            if text.startswith("---"):
+                end = text.find("---", 3)
+                if end != -1:
+                    text = text[end + 3:].lstrip("\n")
+            return text
+    return ""
+
+
+mcp = FastMCP("bfs", instructions=_load_instructions())
 
 _b = BFSBrowser()
 _j = lambda x: json.dumps(x, ensure_ascii=False, default=str)
