@@ -379,23 +379,34 @@ class BFSBrowser:
 
     async def _format_bet_table(self, title_label: str) -> str:
         title = await self.page.title()
+        url = self.page.url
         if "registration" in title.lower() or "error" in title.lower():
-            return "Error: not authenticated. Please login first."
+            return f"Error: not authenticated. Please login first. (url={url})"
         data = await self.page.evaluate("""() => {
-            const t = document.querySelector('#row-content table');
-            if (!t) return {headers: [], rows: []};
-            const h = Array.from(t.querySelectorAll('thead th')).map(th=>th.textContent.trim()||'-');
-            const r = [];
-            t.querySelectorAll('tbody tr').forEach(tr => {
-                const c = Array.from(tr.querySelectorAll('td')).map(td=>td.textContent.trim().replace(/\\s+/g,' ')||'-');
-                if(c.some(x=>x!=='-')) r.push(c);
-            });
-            return {headers: h, rows: r};
+            const selectors = ['#row-content table', 'table.table', 'table'];
+            for (const sel of selectors) {
+                const t = document.querySelector(sel);
+                if (!t) continue;
+                const h = Array.from(t.querySelectorAll('thead th, tr:first-child th'))
+                    .map(th => th.textContent.trim()).filter(x => x);
+                const r = [];
+                const bodyRows = t.querySelectorAll('tbody tr');
+                (bodyRows.length ? bodyRows : t.querySelectorAll('tr:not(:first-child)')).forEach(tr => {
+                    const c = Array.from(tr.querySelectorAll('td'))
+                        .map(td => td.textContent.trim().replace(/\\s+/g, ' ')).filter(x => x);
+                    if (c.length) r.push(c);
+                });
+                if (r.length) return {headers: h, rows: r};
+            }
+            const ct = (document.querySelector('#row-content') || document.body)
+                .textContent.replace(/\\s+/g, ' ').trim();
+            return {headers: [], rows: [], page_text: ct.substring(0, 2000)};
         }""")
         headers = data.get("headers", [])
         rows = data.get("rows", [])
         if not rows:
-            return f"{title_label}: none"
+            page_text = data.get("page_text", "")
+            return f"{title_label}: none found.\nURL: {url}\nPage content: {page_text[:1500]}"
         lines = [f"{title_label} ({len(rows)}):", ""]
         for i, row in enumerate(rows, 1):
             parts = []
