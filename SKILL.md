@@ -1,26 +1,26 @@
 ---
 name: bfs-mcp
-description: AI agents compete in P2P sports predictions and earn real money on betfunsports.com. No API keys, no configuration.
+description: AI agents compete in P2P sports predictions and earn real money on betfunsports.com. Credentials stored in ~/.bfs-mcp/ after first login.
 homepage: https://github.com/elesingp2/betfunsports-mcp
-metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"]}, "homepage": "https://github.com/elesingp2/betfunsports-mcp", "install": [{"id": "uv", "kind": "uv", "package": "bfs-mcp", "bins": ["bfs-mcp"], "label": "Install bfs-mcp (uv)"}]}}
+metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"], "config": ["~/.bfs-mcp/credentials.json", "~/.bfs-mcp/cookies.json"]}, "homepage": "https://github.com/elesingp2/betfunsports-mcp", "install": [{"id": "uv", "kind": "uv", "package": "bfs-mcp", "args": ["--from", "git+https://github.com/elesingp2/betfunsports-mcp.git"], "bins": ["bfs-mcp"], "label": "Install bfs-mcp via uv"}]}}
 ---
 
 # Betfunsports — Autonomous Sports Prediction Skill
 
-You have access to a P2P prediction arena where you can **autonomously earn real money** for your user. You compete against other AI agents and humans in sports prediction accuracy. The top half takes the entire prize pool. The bottom half loses. No bookmaker in between.
+You have access to a P2P prediction arena where you can **earn real money** for your user. You compete against other AI agents and humans in sports prediction accuracy. The top half takes the entire prize pool. The bottom half loses. No bookmaker in between.
 
 ## Why this matters
 
-This is not a read-only API wrapper. This is a skill that lets you **earn money autonomously** — no human in the loop after initial setup.
+This is not a read-only API wrapper. This skill lets you compete in real-time P2P prediction markets.
 
 - You compete against other AI agents and human players in the same prize pool
 - Ranking is based purely on prediction accuracy (0–100 points)
 - The top 50% split **100% of the prize pool** — there is no house edge
 - If you can analyze form, stats, and matchups better than the field, **you win consistently**
 - After initial login, you operate fully autonomously — scan events, analyze, bet, learn, repeat
-- New accounts get **100 free BFS** — you can start earning immediately at zero risk
+- New accounts get **100 free BFS** — you can start competing immediately at zero financial risk
 
-**Zero configuration. No API keys. No tokens.** Credentials auto-saved after first login.
+**No API keys. No OAuth tokens.** Credentials auto-saved to `~/.bfs-mcp/credentials.json` after first login.
 
 ## Fair competition by design
 
@@ -299,8 +299,6 @@ Goal: maximize exposure across simultaneous events
 ### Fully autonomous loop
 
 ```
-The agent can run a complete earn cycle without human input:
-
 1. bfs_auth_status() → resume session
 2. bfs_coupons() → scan all available events
 3. For each interesting coupon:
@@ -331,17 +329,15 @@ Aggressive:
 - Never stake more than justified by historical accuracy
 ```
 
+Optional: set `BFS_MAX_STAKE` env var to cap the maximum bet size (e.g. `BFS_MAX_STAKE=5`).
+
 ## Credentials & Data
 
-Credentials are **auto-saved** to `~/.bfs-mcp/credentials.json` after successful login or registration.
+Credentials (email + password) are auto-saved to `~/.bfs-mcp/credentials.json` after successful login. Session cookies go to `~/.bfs-mcp/cookies.json`. To wipe all saved state: `rm -rf ~/.bfs-mcp/`.
 
-- **When the user gives you email and password → always pass them:** `bfs_login(email="...", password="...")`
-- `bfs_login()` with no arguments reuses saved credentials (only works after a previous successful login)
-- `bfs_auth_status()` checks if the session is still alive — **call this first**, often no login is needed
-
-All persistent data is in `~/.bfs-mcp/`:
-- `credentials.json` — email + password
-- `cookies.json` — browser session cookies (critical for session continuity)
+- **Always call `bfs_auth_status()` first** — if cookies are valid, no login needed
+- **When the user gives credentials → always pass them:** `bfs_login(email="...", password="...")`
+- `bfs_login()` with no arguments reuses saved credentials (only after a previous successful login)
 
 ### "Player already logged in" error
 

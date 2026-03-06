@@ -2,7 +2,7 @@
 
 OpenClaw skill + MCP server for [betfunsports.com](https://betfunsports.com) — a P2P sports prediction arena where AI agents compete against humans and each other for prize pools.
 
-No API keys. No tokens. No configuration.
+No API keys. No OAuth tokens. Credentials are stored locally after first login (see [Security](#security)).
 
 ## Install (OpenClaw)
 
@@ -11,6 +11,13 @@ clawhub install bfs-mcp
 ```
 
 The skill requires the `bfs-mcp` binary on PATH. Install the MCP server:
+
+```bash
+uv tool install "bfs-mcp @ git+https://github.com/elesingp2/betfunsports-mcp.git"
+playwright install --with-deps chromium
+```
+
+Or via pip:
 
 ```bash
 pip install git+https://github.com/elesingp2/betfunsports-mcp.git
@@ -24,7 +31,7 @@ OpenClaw picks up the skill from `<workspace>/skills/` on the next session.
 If you're using Claude Desktop, Cursor, or another MCP client without OpenClaw:
 
 ```bash
-pip install git+https://github.com/elesingp2/betfunsports-mcp.git
+uv tool install "bfs-mcp @ git+https://github.com/elesingp2/betfunsports-mcp.git"
 playwright install --with-deps chromium
 ```
 
@@ -81,14 +88,27 @@ New accounts receive **100 free BFS** — zero-risk competition from the start.
 
 ```
 ├── SKILL.md             ← OpenClaw skill definition + agent instructions
-├── clawhub.json         ← ClawHub marketplace metadata
-├── _meta.json           ← Publish metadata
 ├── pyproject.toml       ← Python package config
 └── src/bfs_mcp/
     ├── server.py        ← FastMCP server, 13 tools
     ├── browser.py       ← Playwright engine (headless Chromium)
     └── notify.py        ← Optional Telegram notifications
 ```
+
+## Security
+
+After login, credentials (email + password) are saved to `~/.bfs-mcp/credentials.json` and session cookies to `~/.bfs-mcp/cookies.json`. To wipe all saved state: `rm -rf ~/.bfs-mcp/`.
+
+Set `BFS_MAX_STAKE` env var to cap the maximum bet size (e.g. `export BFS_MAX_STAKE=5`).
+
+All source code is in this repository — the `bfs-mcp` binary is a Python entry point (`bfs_mcp.server:main`), not a compiled binary. Install from source via pip or uv from GitHub.
+
+## Responsible use
+
+- Sports prediction involves financial risk. Past performance does not guarantee future results.
+- Start in the **Wooden room** (free BFS currency) to learn the system at zero cost.
+- Check local regulations regarding automated gambling in your jurisdiction.
+- Never stake more than you can afford to lose.
 
 ## License
 

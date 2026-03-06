@@ -20,6 +20,7 @@ def _update_tg_config(email: str, balance_eur: str = "", balance_bfs: str = "") 
         config["logged_in_as"] = email
         config["balance_eur"] = balance_eur
         config["balance_bfs"] = balance_bfs
+        _TG_CONFIG.parent.mkdir(parents=True, exist_ok=True)
         _TG_CONFIG.write_text(json.dumps(config, indent=2))
     except Exception:
         log.debug("tg config update failed", exc_info=True)

@@ -1,9 +1,10 @@
-"""BFS MCP Server — zero-config platform API for betfunsports.com."""
+"""BFS MCP Server — platform API for betfunsports.com."""
 
 from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP, Image
@@ -13,6 +14,9 @@ from . import notify
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
+
+_max_raw = os.environ.get("BFS_MAX_STAKE", "").strip()
+MAX_STAKE: float | None = float(_max_raw) if _max_raw else None
 
 
 def _load_instructions() -> str:
@@ -132,6 +136,12 @@ async def bfs_place_bet(coupon_path: str, selections: str | dict,
     - selections: JSON {"eventId": "outcomeCode"} — for 1X2: "8"=home, "9"=draw, "10"=away
     - room_index: 0=Wooden(BFS,free) 1=Bronze(1-5€) 2=Silver(10-50€) 3=Golden(100-500€)
     - stake: amount string. Empty = room default."""
+    if MAX_STAKE is not None and stake:
+        try:
+            if float(stake) > MAX_STAKE:
+                return _j({"error": f"Stake {stake} exceeds BFS_MAX_STAKE limit ({MAX_STAKE})"})
+        except ValueError:
+            pass
     await _e()
     sel = json.loads(selections) if isinstance(selections, str) else selections
     result = await _b.place_bet(coupon_path, sel, room_index, stake or None)
