@@ -22,19 +22,16 @@ UA = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
 
-_LIB_DIR = DATA_DIR / "lib"
-_BROWSERS_DIR = DATA_DIR / "browsers"
-
-
 def _ensure_env() -> None:
-    """Set LD_LIBRARY_PATH and PLAYWRIGHT_BROWSERS_PATH from ~/.bfs-mcp if needed."""
-    if _LIB_DIR.is_dir():
+    lib = DATA_DIR / "lib"
+    if lib.is_dir():
         ld = os.environ.get("LD_LIBRARY_PATH", "")
-        if str(_LIB_DIR) not in ld:
-            os.environ["LD_LIBRARY_PATH"] = f"{_LIB_DIR}:{ld}" if ld else str(_LIB_DIR)
-    browsers = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
-    if (not browsers or not Path(browsers).exists()) and _BROWSERS_DIR.exists():
-        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(_BROWSERS_DIR)
+        if str(lib) not in ld:
+            os.environ["LD_LIBRARY_PATH"] = f"{lib}:{ld}" if ld else str(lib)
+    browsers = DATA_DIR / "browsers"
+    bp = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
+    if (not bp or not Path(bp).exists()) and browsers.exists():
+        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(browsers)
 
 
 @dataclass

@@ -204,24 +204,22 @@ async def bfs_screenshot(full_page: bool = False) -> Image:
     return Image(data=data, format="png")
 
 
-_BROWSERS_DEFAULT = str(Path.home() / ".bfs-mcp" / "browsers")
-_LIB_DIR = Path.home() / ".bfs-mcp" / "lib"
-
-_CHROMIUM_DEB_PKGS = [
+_DATA = Path.home() / ".bfs-mcp"
+_LIB_DIR = _DATA / "lib"
+_BROWSERS_DEFAULT = str(_DATA / "browsers")
+_DEB_PKGS = [
     "libnspr4", "libnss3", "libgbm1", "libxkbcommon0", "libasound2",
     "libatk-bridge2.0-0", "libatspi2.0-0", "libdrm2", "libwayland-server0",
 ]
 
 
 def setup():
-    """Install Playwright Chromium and attempt to fetch missing system libs."""
     import subprocess, sys
 
     browsers = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
     if not browsers or not os.access(str(Path(browsers).parent), os.W_OK):
         browsers = _BROWSERS_DEFAULT
         os.environ["PLAYWRIGHT_BROWSERS_PATH"] = browsers
-    print(f"PLAYWRIGHT_BROWSERS_PATH={browsers}")
 
     rc = subprocess.call([sys.executable, "-m", "playwright", "install", "chromium"])
     if rc != 0:
@@ -230,53 +228,33 @@ def setup():
     if sys.platform == "linux":
         _fix_system_libs(browsers)
 
-    sys.exit(0)
-
 
 def _fix_system_libs(browsers_path: str) -> None:
-    """Best-effort: detect missing .so and try to pull them from Debian repos."""
-    import subprocess, glob, tempfile
+    import subprocess, glob, shutil, tempfile
 
     bins = glob.glob(f"{browsers_path}/**/chrome-headless-shell", recursive=True) \
-         + glob.glob(f"{browsers_path}/**/chrome", recursive=True) \
-         + glob.glob(f"{browsers_path}/**/chromium", recursive=True)
+         + glob.glob(f"{browsers_path}/**/chrome", recursive=True)
     if not bins:
         return
 
-    result = subprocess.run(["ldd", bins[0]], capture_output=True, text=True)
-    missing = [l.split()[0] for l in result.stdout.splitlines() if "not found" in l]
+    out = subprocess.run(["ldd", bins[0]], capture_output=True, text=True).stdout
+    missing = [l.split()[0] for l in out.splitlines() if "not found" in l]
     if not missing:
-        print("All system libraries present.")
         return
 
-    print(f"Missing libraries: {', '.join(missing)}")
     _LIB_DIR.mkdir(parents=True, exist_ok=True)
-
     with tempfile.TemporaryDirectory() as tmp:
-        dl = subprocess.run(
-            ["apt-get", "download"] + _CHROMIUM_DEB_PKGS,
-            cwd=tmp, capture_output=True, text=True,
-        )
+        subprocess.run(["apt-get", "download"] + _DEB_PKGS, cwd=tmp, capture_output=True)
         debs = glob.glob(f"{tmp}/*.deb")
         if not debs:
-            print("apt-get download failed — fetch .deb packages manually.")
-            print(f"  Packages: {' '.join(_CHROMIUM_DEB_PKGS)}")
-            print(f"  Extract to: {_LIB_DIR}")
+            print(f"apt-get download failed. Extract these to {_LIB_DIR}:")
+            print(f"  {' '.join(_DEB_PKGS)}")
             return
         for deb in debs:
             subprocess.run(["dpkg-deb", "-x", deb, tmp], capture_output=True)
-        import shutil
         for so in Path(tmp).rglob("*.so*"):
             if so.is_file():
                 shutil.copy2(so, _LIB_DIR / so.name)
-
-    result2 = subprocess.run(["ldd", bins[0]], capture_output=True, text=True,
-                             env={**os.environ, "LD_LIBRARY_PATH": str(_LIB_DIR)})
-    still = [l.split()[0] for l in result2.stdout.splitlines() if "not found" in l]
-    if still:
-        print(f"Still missing: {', '.join(still)}")
-    else:
-        print(f"Libraries installed to {_LIB_DIR} (auto-detected at runtime)")
 
 
 def main():
