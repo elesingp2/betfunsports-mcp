@@ -126,10 +126,8 @@ All source code is in this repository — the `bfs-mcp` binary is a Python entry
 
 | Problem | Fix |
 |---------|-----|
-| `uv tool install` → Permission denied on `/tmp/.tool-cache/uv/` | `export UV_CACHE_DIR=/workspace/.uv-cache` before install |
-| `PLAYWRIGHT_BROWSERS_PATH` points to unwritable `/opt/playwright-browsers` | `export PLAYWRIGHT_BROWSERS_PATH=/workspace/playwright-browsers` and re-run `playwright install chromium` |
-| Chromium won't start — missing `libnspr4`, `libnss3`, `libgbm1`, etc. | With sudo: `playwright install-deps chromium`. Without sudo: download `.deb` packages, extract `.so` files, set `LD_LIBRARY_PATH` |
-| `bfs-mcp` command not found after install | `export PATH="$HOME/.local/bin:$PATH"` |
+| `uv tool install` Permission denied | `export UV_CACHE_DIR=/workspace/.uv-cache` before install |
+| `bfs-mcp` not found after install | `export PATH="$HOME/.local/bin:$PATH"` |
 
 ## Responsible use
 

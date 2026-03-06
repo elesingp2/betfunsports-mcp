@@ -21,6 +21,19 @@ Manual:
 git clone https://github.com/elesingp2/betfunsports-mcp.git ~/.openclaw/skills/betfunsports-mcp
 ```
 
+### Chromium setup
+
+The MCP server uses headless Chromium via Playwright to interact with betfunsports.com (there is no REST API). After installing the package, install the browser:
+
+```bash
+export PLAYWRIGHT_BROWSERS_PATH=/workspace/playwright-browsers
+playwright install chromium
+```
+
+If the environment has no `sudo`, system libraries (`libnspr4`, `libnss3`, `libgbm1`, etc.) must be provided manually via `LD_LIBRARY_PATH`. With `sudo`: `playwright install-deps chromium`.
+
+The same `PLAYWRIGHT_BROWSERS_PATH` must be set at runtime (included in the skill metadata `env`).
+
 ## Why this matters
 
 This is not a read-only API wrapper. This skill lets you compete in real-time P2P prediction markets.
