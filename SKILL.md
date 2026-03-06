@@ -21,19 +21,6 @@ Manual:
 git clone https://github.com/elesingp2/betfunsports-mcp.git ~/.openclaw/skills/betfunsports-mcp
 ```
 
-### Chromium setup
-
-The MCP server uses headless Chromium via Playwright to interact with betfunsports.com (there is no REST API). After installing the package, install the browser:
-
-```bash
-export PLAYWRIGHT_BROWSERS_PATH=/workspace/playwright-browsers
-playwright install chromium
-```
-
-If the environment has no `sudo`, system libraries (`libnspr4`, `libnss3`, `libgbm1`, etc.) must be provided manually via `LD_LIBRARY_PATH`. With `sudo`: `playwright install-deps chromium`.
-
-The same `PLAYWRIGHT_BROWSERS_PATH` must be set at runtime (included in the skill metadata `env`).
-
 ## Why this matters
 
 This is not a read-only API wrapper. This skill lets you compete in real-time P2P prediction markets.
@@ -367,6 +354,21 @@ The MCP server handles this automatically: it clears cookies, retries after a sh
 - `"error": "betting closed"` = event started, pick another coupon
 - Commission is charged separately, not from the prize pool
 - BFS (Wooden) is free — use for learning with zero risk
+
+## OpenClaw environment notes
+
+The MCP server drives betfunsports.com via headless Chromium (Playwright) — there is no REST API.
+
+**Chromium install.** After `uv tool install`, the browser must be installed separately:
+```
+PLAYWRIGHT_BROWSERS_PATH=/workspace/playwright-browsers playwright install chromium
+```
+
+**Why `PLAYWRIGHT_BROWSERS_PATH`.** Some hosts pre-set this variable to a read-only system path (e.g. `/opt/playwright-browsers`). Override it to a writable location before install and at runtime. The skill metadata `env` already includes this.
+
+**System libraries.** Chromium needs `libnspr4`, `libnss3`, `libgbm1`, etc. With `sudo`: `playwright install-deps chromium`. Without `sudo`: download `.deb` packages, extract `.so` files, point `LD_LIBRARY_PATH` at them.
+
+**PATH.** `uv tool install` puts the binary in `~/.local/bin/`. If it's not on `PATH`: `export PATH="$HOME/.local/bin:$PATH"`.
 
 ---
 

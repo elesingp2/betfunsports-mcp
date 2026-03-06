@@ -61,27 +61,7 @@ class BFSBrowser:
         if self.ready:
             return
         self._pw = await async_playwright().start()
-        try:
-            self._browser = await self._pw.chromium.launch(headless=True)
-        except Exception as exc:
-            msg = str(exc)
-            hint = ""
-            if "Executable doesn't exist" in msg or "browserType.launch" in msg:
-                hint = (
-                    "Chromium not installed. Run:\n"
-                    "  PLAYWRIGHT_BROWSERS_PATH=/workspace/playwright-browsers "
-                    "playwright install chromium"
-                )
-            elif any(lib in msg for lib in ("libnspr4", "libnss3", "libatk", "libgbm",
-                                            "libdrm", "libxkbcommon", "libasound", "libwayland")):
-                hint = (
-                    "Missing system libraries for Chromium.\n"
-                    "  With sudo: playwright install-deps chromium\n"
-                    "  Without sudo: see README troubleshooting."
-                )
-            if hint:
-                raise RuntimeError(f"Chromium launch failed. {hint}") from exc
-            raise
+        self._browser = await self._pw.chromium.launch(headless=True)
         self._ctx = await self._browser.new_context(viewport={"width": 1920, "height": 1080}, user_agent=UA)
         await self._load_cookies()
         self._page = await self._ctx.new_page()
