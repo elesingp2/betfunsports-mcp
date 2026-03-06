@@ -216,11 +216,9 @@ _DEB_PKGS = [
 def setup():
     import subprocess, sys
 
-    for var, default in [("UV_CACHE_DIR", str(_DATA / "uv-cache")),
-                         ("PLAYWRIGHT_BROWSERS_PATH", _BROWSERS_DEFAULT)]:
-        val = os.environ.get(var, "")
-        if not val or not os.access(str(Path(val).parent), os.W_OK):
-            os.environ[var] = default
+    bp = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
+    if not bp or not os.access(str(Path(bp).parent), os.W_OK):
+        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = _BROWSERS_DEFAULT
 
     rc = subprocess.call([sys.executable, "-m", "playwright", "install", "chromium"])
     if rc != 0:
