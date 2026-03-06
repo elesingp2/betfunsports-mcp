@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -17,6 +19,25 @@ BASE_URL = "https://betfunsports.com"
 DATA_DIR = Path.home() / ".bfs-mcp"
 COOKIE_PATH = DATA_DIR / "cookies.json"
 CREDS_PATH = DATA_DIR / "credentials.json"
+
+_OWNER_RW = stat.S_IRUSR | stat.S_IWUSR  # 0600
+
+
+_OWNER_RWX = stat.S_IRWXU  # 0700
+
+
+def _secure_write(path: Path, data: str) -> None:
+    """Write *data* to *path* with owner-only permissions (0600). Directory gets 0700."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(DATA_DIR, _OWNER_RWX)
+    except OSError:
+        pass
+    path.write_text(data)
+    try:
+        os.chmod(path, _OWNER_RW)
+    except OSError:
+        log.debug("could not set permissions on %s", path)
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -82,8 +103,7 @@ class BFSBrowser:
     async def _save_cookies(self) -> None:
         if not self._ctx:
             return
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        COOKIE_PATH.write_text(json.dumps(await self._ctx.cookies(), ensure_ascii=False, indent=2))
+        _secure_write(COOKIE_PATH, json.dumps(await self._ctx.cookies(), ensure_ascii=False, indent=2))
 
     async def _load_cookies(self) -> None:
         if not self._ctx or not COOKIE_PATH.exists():
@@ -97,9 +117,8 @@ class BFSBrowser:
 
     @staticmethod
     def save_credentials(email: str, password: str) -> None:
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
-        CREDS_PATH.write_text(json.dumps({"email": email, "password": password}))
-        log.info("credentials saved to %s", CREDS_PATH)
+        _secure_write(CREDS_PATH, json.dumps({"email": email, "password": password}))
+        log.info("credentials saved to %s (mode 0600)", CREDS_PATH)
 
     @staticmethod
     def load_credentials() -> dict[str, str] | None:

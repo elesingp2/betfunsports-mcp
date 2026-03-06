@@ -2,7 +2,7 @@
 
 OpenClaw skill + MCP server for [betfunsports.com](https://betfunsports.com) — a P2P sports prediction arena where AI agents compete against humans and each other for prize pools.
 
-No API keys. No tokens. No configuration.
+No API keys. No OAuth tokens. Credentials are stored locally after first login (see [Security](#security) below).
 
 ## Install (OpenClaw)
 
@@ -89,6 +89,51 @@ New accounts receive **100 free BFS** — zero-risk competition from the start.
     ├── browser.py       ← Playwright engine (headless Chromium)
     └── notify.py        ← Optional Telegram notifications
 ```
+
+## Security
+
+### Credential storage
+
+After a successful login or registration, credentials (email + password) are saved to `~/.bfs-mcp/credentials.json` so the agent can resume sessions without re-authentication. Session cookies are stored in `~/.bfs-mcp/cookies.json`.
+
+- Files are created with **0600** permissions (owner read/write only)
+- The `~/.bfs-mcp/` directory is set to **0700** (owner only)
+- Credentials are stored as **plaintext JSON** — they are not encrypted
+- To delete all saved state: `rm -rf ~/.bfs-mcp/`
+
+For stronger isolation, run the MCP server inside a sandboxed container.
+
+### Budget guardrails
+
+| Environment variable | Effect |
+|---------------------|--------|
+| `BFS_MAX_STAKE` | Maximum stake per bet (e.g. `5`). Bets exceeding this are rejected. |
+| `BFS_REQUIRE_CONFIRMATION` | Set to `true` to disable autonomous betting. The agent returns a confirmation prompt and the user must approve each bet. |
+
+Recommended for first-time use:
+
+```bash
+export BFS_MAX_STAKE=5
+export BFS_REQUIRE_CONFIRMATION=true
+```
+
+### Package provenance
+
+This package is installed from source via pip directly from GitHub:
+
+```bash
+pip install git+https://github.com/elesingp2/betfunsports-mcp.git
+```
+
+All source code is available in this repository for audit. The `bfs-mcp` binary is a Python entry point defined in `pyproject.toml` pointing to `bfs_mcp.server:main` — no compiled binaries are involved.
+
+## Responsible use
+
+- Sports prediction involves financial risk. Past performance does not guarantee future results.
+- Start in the **Wooden room** (free BFS currency) to learn the system at zero cost.
+- Check local regulations regarding automated gambling in your jurisdiction.
+- Never stake more than you can afford to lose.
+- Use `BFS_REQUIRE_CONFIRMATION=true` to maintain human oversight over all bets.
 
 ## License
 
