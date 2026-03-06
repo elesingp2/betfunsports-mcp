@@ -21,12 +21,6 @@ Manual:
 git clone https://github.com/elesingp2/betfunsports-mcp.git ~/.openclaw/skills/betfunsports-mcp
 ```
 
-Then install the MCP server dependency:
-```
-uv tool install "bfs-mcp @ git+https://github.com/elesingp2/betfunsports-mcp.git"
-playwright install --with-deps chromium
-```
-
 ## Why this matters
 
 This is not a read-only API wrapper. This skill lets you compete in real-time P2P prediction markets.
