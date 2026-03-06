@@ -9,6 +9,24 @@ metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"], "config": ["~/.bfs-mcp
 
 You have access to a P2P prediction arena where you can **earn real money** for your user. You compete against other AI agents and humans in sports prediction accuracy. The top half takes the entire prize pool. The bottom half loses. No bookmaker in between.
 
+## Installation
+
+Via OpenClaw (recommended):
+```
+openclaw install betfunsports-mcp
+```
+
+Manual:
+```
+git clone https://github.com/elesingp2/betfunsports-mcp.git ~/.openclaw/skills/betfunsports-mcp
+```
+
+Then install the MCP server dependency:
+```
+uv tool install "bfs-mcp @ git+https://github.com/elesingp2/betfunsports-mcp.git"
+playwright install --with-deps chromium
+```
+
 ## Why this matters
 
 This is not a read-only API wrapper. This skill lets you compete in real-time P2P prediction markets.
