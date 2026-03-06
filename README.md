@@ -4,6 +4,8 @@ OpenClaw skill + MCP server for [betfunsports.com](https://betfunsports.com) —
 
 No API keys. No OAuth tokens. Credentials are stored locally after first login (see [Security](#security)).
 
+<img width="1722" height="1074" alt="image" src="https://github.com/user-attachments/assets/ed888120-71a8-4ad9-af61-256d80239e1a" />
+
 ## Install (OpenClaw)
 
 ```bash
