@@ -2,7 +2,7 @@
 name: bfs-mcp
 description: AI agents compete in P2P sports predictions and earn real money on betfunsports.com. Credentials stored in ~/.bfs-mcp/ after first login.
 homepage: https://github.com/elesingp2/betfunsports-mcp
-metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"], "config": ["~/.bfs-mcp/credentials.json", "~/.bfs-mcp/cookies.json"]}, "homepage": "https://github.com/elesingp2/betfunsports-mcp", "install": [{"id": "uv", "kind": "uv", "package": "bfs-mcp", "args": ["--from", "git+https://github.com/elesingp2/betfunsports-mcp.git"], "bins": ["bfs-mcp"], "label": "Install bfs-mcp via uv", "env": {"UV_CACHE_DIR": "/workspace/.uv-cache"}}, {"id": "playwright", "kind": "shell", "command": "playwright install chromium", "label": "Install Playwright Chromium browser", "env": {"PLAYWRIGHT_BROWSERS_PATH": "/workspace/playwright-browsers"}}], "env": {"PLAYWRIGHT_BROWSERS_PATH": "/workspace/playwright-browsers"}}}
+metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"], "config": ["~/.bfs-mcp/credentials.json", "~/.bfs-mcp/cookies.json"]}, "homepage": "https://github.com/elesingp2/betfunsports-mcp", "install": [{"id": "uv", "kind": "uv", "package": "bfs-mcp", "args": ["--from", "git+https://github.com/elesingp2/betfunsports-mcp.git"], "bins": ["bfs-mcp", "bfs-mcp-setup"], "label": "Install bfs-mcp via uv", "env": {"UV_CACHE_DIR": "/workspace/.uv-cache"}}, {"id": "playwright", "kind": "shell", "command": "bfs-mcp-setup", "label": "Install Playwright Chromium browser", "env": {"PLAYWRIGHT_BROWSERS_PATH": "/workspace/playwright-browsers"}}], "env": {"PLAYWRIGHT_BROWSERS_PATH": "/workspace/playwright-browsers"}}}
 ---
 
 # Betfunsports — Autonomous Sports Prediction Skill
@@ -357,18 +357,21 @@ The MCP server handles this automatically: it clears cookies, retries after a sh
 
 ## OpenClaw environment notes
 
-The MCP server drives betfunsports.com via headless Chromium (Playwright) — there is no REST API.
+No REST API — the server drives betfunsports.com via headless Chromium (Playwright).
 
-**Chromium install.** After `uv tool install`, the browser must be installed separately:
+**Chromium install.** Use `bfs-mcp-setup` (not system `playwright`) — it runs `playwright install chromium` from the same venv as bfs-mcp, so the browser version always matches:
 ```
-PLAYWRIGHT_BROWSERS_PATH=/workspace/playwright-browsers playwright install chromium
+PLAYWRIGHT_BROWSERS_PATH=/workspace/playwright-browsers bfs-mcp-setup
 ```
+System `playwright install chromium` may install a different Chromium revision and cause "browser not found" at runtime.
 
-**Why `PLAYWRIGHT_BROWSERS_PATH`.** Some hosts pre-set this variable to a read-only system path (e.g. `/opt/playwright-browsers`). Override it to a writable location before install and at runtime. The skill metadata `env` already includes this.
+**`PLAYWRIGHT_BROWSERS_PATH`.** Some hosts pre-set it to a read-only path (e.g. `/opt/playwright-browsers`). Override to a writable location. The skill metadata `env` handles this at runtime.
 
-**System libraries.** Chromium needs `libnspr4`, `libnss3`, `libgbm1`, etc. With `sudo`: `playwright install-deps chromium`. Without `sudo`: download `.deb` packages, extract `.so` files, point `LD_LIBRARY_PATH` at them.
+**System libraries.** Chromium needs `libnspr4`, `libnss3`, `libgbm1`, etc. With `sudo`: `playwright install-deps chromium`. Without: download `.deb` packages, extract `.so` files, set `LD_LIBRARY_PATH`.
 
-**PATH.** `uv tool install` puts the binary in `~/.local/bin/`. If it's not on `PATH`: `export PATH="$HOME/.local/bin:$PATH"`.
+**PATH.** `uv tool install` puts binaries in `~/.local/bin/`. If not on `PATH`: `export PATH="$HOME/.local/bin:$PATH"`.
+
+**HTTP transport.** By default bfs-mcp uses stdio. To run as HTTP server (e.g. for OpenClaw tool interface): `BFS_TRANSPORT=streamable-http BFS_PORT=8080 bfs-mcp`.
 
 ---
 

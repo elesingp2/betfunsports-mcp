@@ -16,7 +16,7 @@ The skill requires the `bfs-mcp` binary on PATH. Install the MCP server:
 
 ```bash
 uv tool install "bfs-mcp @ git+https://github.com/elesingp2/betfunsports-mcp.git"
-playwright install chromium
+bfs-mcp-setup
 ```
 
 Or via pip:
@@ -32,7 +32,7 @@ If you're using Claude Desktop, Cursor, or another MCP client without OpenClaw:
 
 ```bash
 uv tool install "bfs-mcp @ git+https://github.com/elesingp2/betfunsports-mcp.git"
-playwright install chromium
+bfs-mcp-setup
 ```
 
 **Claude Code:**
