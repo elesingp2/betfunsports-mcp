@@ -97,13 +97,32 @@ New accounts receive **100 free BFS** — zero-risk competition from the start.
     └── notify.py        ← Optional Telegram notifications
 ```
 
+## Telegram notifications (optional)
+
+Install [betfunsports-telegram-bot](https://github.com/elesingp2/betfunsports-telegram-bot) to get real-time Telegram alerts on every agent action — logins, bets (with screenshots), errors.
+
+```bash
+pip install git+https://github.com/elesingp2/betfunsports-telegram-bot.git
+BFS_TG_TOKEN=your_token bfs-bot    # then send /start in Telegram
+```
+
+Once configured, `bfs-mcp` picks up the Telegram config automatically — no restarts needed.
+
 ## Security
 
-After login, credentials (email + password) are saved to `~/.bfs-mcp/credentials.json` and session cookies to `~/.bfs-mcp/cookies.json`. To wipe all saved state: `rm -rf ~/.bfs-mcp/`.
+All state is stored locally in `~/.bfs-mcp/`:
+
+| File | Content |
+|------|---------|
+| `credentials.json` | Email + password (saved after successful login) |
+| `cookies.json` | Session cookies |
+| `telegram.json` | Telegram bot token + chat IDs (created by `bfs-bot`) |
+
+To wipe all saved state: `rm -rf ~/.bfs-mcp/`.
 
 Set `BFS_MAX_STAKE` env var to cap the maximum bet size (e.g. `export BFS_MAX_STAKE=5`).
 
-All source code is in this repository — the `bfs-mcp` binary is a Python entry point (`bfs_mcp.server:main`), not a compiled binary. Install from source via pip or uv from GitHub.
+All source code is in this repository — the `bfs-mcp` binary is a Python entry point (`bfs_mcp.server:main`), not a compiled binary.
 
 ## Responsible use
 

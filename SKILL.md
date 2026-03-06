@@ -124,13 +124,12 @@ New accounts get **100 free BFS** — the agent can start competing immediately 
 ## Workflow
 
 ```
-1. bfs_auth_status()                               → check session (often no login needed)
+1. bfs_auth_status()                               → check session; if authenticated: true → skip step 2
 2. bfs_login(email, password)                      → authenticate (credentials auto-saved)
 3. bfs_coupons()                                   → browse available events
-4. bfs_coupon_details("/FOOTBALL/.../18638")       → get match details + outcomes
-5. bfs_place_bet(coupon_path, selections, 0, "5")  → place bet
-6. bfs_active_bets()                               → track open positions
-7. bfs_bet_history()                               → review past results
+4. bfs_coupon_details("/FOOTBALL/.../18638")       → get match details + outcomes + rooms
+5. bfs_place_bet(coupon_path, selections, 0, "5")  → place bet (stake must be within room range)
+6. bfs_bet_history()                               → review past results + accuracy scores
 ```
 
 ## Tools (13)
@@ -147,9 +146,10 @@ New accounts get **100 free BFS** — the agent can start competing immediately 
 
 ### Login rules
 
-1. **Always call `bfs_auth_status()` first.** If it returns `authenticated: true`, no login is needed.
+1. **Always call `bfs_auth_status()` first.** If it returns `authenticated: true`, skip login entirely — the session is active.
 2. **When the user gives you email and password — always pass them to `bfs_login(email, password)`.** Never call `bfs_login()` without arguments if the user just provided credentials.
 3. Calling `bfs_login()` with no arguments only works when credentials were previously saved (after a successful login).
+4. If the session is already active, `bfs_login()` returns `"already logged in"` without re-authenticating — even if you pass different credentials.
 
 ### Betting
 
@@ -157,39 +157,30 @@ New accounts get **100 free BFS** — the agent can start competing immediately 
 |------|-------------|
 | `bfs_coupons()` | List available coupons → `[{path, label}]` |
 | `bfs_coupon_details(path)` | Get events + outcomes + rooms. **Always call before betting.** |
-| `bfs_place_bet(coupon_path, selections, room_index, stake)` | Place bet. selections = JSON `{"eventId": "outcomeCode"}` |
+| `bfs_place_bet(coupon_path, selections, room_index, stake)` | Place bet. selections = JSON `{"eventId": "outcomeCode"}`. Stake must be within room range — server silently caps out-of-range values. |
 
 ### Monitoring
 
 | Tool | Description |
 |------|-------------|
-| `bfs_active_bets()` | Open positions awaiting results |
-| `bfs_bet_history()` | Completed bets with accuracy scores — the agent's main feedback loop (see below) |
+| `bfs_active_bets()` | Open positions awaiting results. If it returns empty unexpectedly, use `bfs_bet_history()` instead. |
+| `bfs_bet_history()` | All bets with accuracy scores — the agent's main feedback loop (see below) |
 | `bfs_account()` | Account details |
 | `bfs_payment_methods()` | Deposit/withdrawal info |
 | `bfs_screenshot(full_page=False)` | Capture current page as image (see below) |
 
 ### Screenshots — `bfs_screenshot()`
 
-Use screenshots to visually inspect the current browser page. The tool returns a **PNG image** that the agent can see and analyze directly.
+Returns a **PNG image** of the current browser page. Use to verify bet placement, debug errors, or show the user what the page looks like.
 
-**When to use:**
-- Debugging unexpected tool results — see what the page actually looks like
-- Verifying a bet was placed correctly
-- Checking page state when other tools return errors
-- Showing the user what the platform looks like
-
-**Parameters:**
-- `full_page=False` (default) — captures only the visible viewport. Fast and reliable.
-- `full_page=True` — captures the entire scrollable page. Slower; may timeout on heavy pages.
-
-**Best practice:** Prefer `full_page=False` (the default). Only use `full_page=True` when you specifically need to see content below the fold.
+- `full_page=False` (default) — viewport only. Fast and reliable.
+- `full_page=True` — entire scrollable page. Slower; may timeout on heavy pages. Falls back to viewport on failure.
 
 ### Why `bfs_bet_history()` matters
 
-Since there are no fixed odds, the only way to know how well the agent is performing is through **accuracy scores** — and those only appear in bet history after a match is resolved.
+The only way to know how well you're performing is **accuracy scores** — they appear in bet history after a match resolves.
 
-Each row returned by `bfs_bet_history()` contains:
+Each row contains:
 
 | Field | What it means |
 |-------|---------------|
@@ -197,27 +188,22 @@ Each row returned by `bfs_bet_history()` contains:
 | **ID** | Coupon ID |
 | **Coupon** | Match name + league |
 | **Date** | When the bet was placed |
-| **Stake** | Amount + currency (e.g. "5 TOT" for Wooden room, "3 EUR" for Bronze) |
-| **Points** | Accuracy score (0–100). **Empty (`-`) until the match is resolved.** |
-| **Winning** | Payout amount. **Empty (`-`) until the match is resolved.** |
+| **Stake** | Amount + currency (e.g. "5 TOT" for Wooden, "3 EUR" for Bronze) |
+| **Points** | Accuracy score (0–100). **`-` until the match resolves.** |
+| **Winning** | Payout amount. **`-` until the match resolves.** |
 
-Example output (before resolution):
 ```
-1. #: 1 | ID: 18638 | Coupon: Atlético Madrid - Celta de Vigo | Date: 05/03 01:05 | Stake: 5 TOT | Points: - | Winning: -
-```
-
-Example output (after resolution):
-```
-1. #: 1 | ID: 18638 | Coupon: Atlético Madrid - Celta de Vigo | Date: 05/03 01:05 | Stake: 5 TOT | Points: 78 | Winning: 8.50 TOT
+Before:  1. #: 1 | ID: 18638 | Coupon: Atlético Madrid - Celta de Vigo | Date: 05/03 01:05 | Stake: 5 TOT | Points: -
+After:   1. #: 1 | ID: 18638 | Coupon: Atlético Madrid - Celta de Vigo | Date: 05/03 01:05 | Stake: 5 TOT | Points: 78 | Winning: 8.50 TOT
 ```
 
-**What the history does NOT show:** the specific outcome the agent predicted (e.g. "home win"). The agent only sees the accuracy score it received. To correlate predictions with scores, the agent should keep its own record of what it predicted.
+**History does NOT show** which outcome you predicted. To correlate predictions with scores, keep your own record.
 
-This is the agent's feedback loop:
-- **Points** tells you how accurate the prediction was. Higher = better.
-- **Winning** tells you the payout. If Winning > Stake, the bet was profitable.
-- **Points: -** means the match hasn't been resolved yet — check back later.
-- Over time, the agent can see which sports and coupon types yield the highest accuracy and focus on those.
+Feedback loop:
+- **Points > 0** → match resolved. Higher = better.
+- **Winning > Stake** → bet was profitable.
+- **Points: -** → not resolved yet, check back later.
+- Track which sports and coupon types yield the highest accuracy and focus on those.
 
 ## 1X2 Outcome Codes
 
@@ -305,9 +291,8 @@ Goal: maximize exposure across simultaneous events
    - bfs_coupon_details() → analyze matchup
    - Decide outcome + confidence level
    - bfs_place_bet() with appropriate room and stake
-4. bfs_active_bets() → monitor open positions
-5. bfs_bet_history() → review results, adjust strategy
-6. Repeat
+4. bfs_bet_history() → review results, adjust strategy
+5. Repeat
 ```
 
 ## Risk Management
@@ -353,6 +338,7 @@ The MCP server handles this automatically: it clears cookies, retries after a sh
 ## Key Rules
 
 - **Always** call `bfs_coupon_details` before `bfs_place_bet`
+- **Always** check the room's stake range before betting (see Rooms table) — the server silently caps out-of-range stakes to the room maximum
 - `"error": "betting closed"` = event started, pick another coupon
 - Commission is charged separately, not from the prize pool
 - BFS (Wooden) is free — use for learning with zero risk
