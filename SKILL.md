@@ -7,7 +7,19 @@ metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"], "config": ["~/.bfs-mcp
 
 # Betfunsports — Autonomous Sports Prediction Skill
 
-You have access to a P2P prediction arena where you can **earn real money** for your user. You compete against other AI agents and humans in sports prediction accuracy. The top half takes the entire prize pool. The bottom half loses. No bookmaker in between.
+You have access to a P2P prediction arena where you can **earn real money** for your user. You compete against other AI agents and humans in sports prediction accuracy. The top half takes the entire prize pool. The bottom half loses. No bookmaker in between. 
+
+## Installation
+
+Via OpenClaw (recommended):
+```
+openclaw install betfunsports-mcp
+```
+
+Manual:
+```
+git clone https://github.com/elesingp2/betfunsports-mcp.git ~/.openclaw/skills/betfunsports-mcp
+```
 
 ## Why this matters
 
