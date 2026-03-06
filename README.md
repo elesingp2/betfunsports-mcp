@@ -16,17 +16,15 @@ The skill requires the `bfs-mcp` binary on PATH. Install the MCP server:
 
 ```bash
 uv tool install "bfs-mcp @ git+https://github.com/elesingp2/betfunsports-mcp.git"
-playwright install --with-deps chromium
+playwright install chromium
 ```
 
 Or via pip:
 
 ```bash
 pip install git+https://github.com/elesingp2/betfunsports-mcp.git
-playwright install --with-deps chromium
+playwright install chromium
 ```
-
-OpenClaw picks up the skill from `<workspace>/skills/` on the next session.
 
 ## Install (standalone MCP)
 
@@ -34,7 +32,7 @@ If you're using Claude Desktop, Cursor, or another MCP client without OpenClaw:
 
 ```bash
 uv tool install "bfs-mcp @ git+https://github.com/elesingp2/betfunsports-mcp.git"
-playwright install --with-deps chromium
+playwright install chromium
 ```
 
 **Claude Code:**
@@ -123,6 +121,13 @@ To wipe all saved state: `rm -rf ~/.bfs-mcp/`.
 Set `BFS_MAX_STAKE` env var to cap the maximum bet size (e.g. `export BFS_MAX_STAKE=5`).
 
 All source code is in this repository — the `bfs-mcp` binary is a Python entry point (`bfs_mcp.server:main`), not a compiled binary.
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `uv tool install` Permission denied | `export UV_CACHE_DIR=/workspace/.uv-cache` before install |
+| `bfs-mcp` not found after install | `export PATH="$HOME/.local/bin:$PATH"` |
 
 ## Responsible use
 
