@@ -14,14 +14,14 @@ _TG_CONFIG = Path.home() / ".bfs-mcp" / "telegram.json"
 
 def _update_tg_config(email: str, balance_eur: str = "", balance_bfs: str = "") -> None:
     try:
-        from .browser import _secure_write
         config: dict = {}
         if _TG_CONFIG.exists():
             config = json.loads(_TG_CONFIG.read_text())
         config["logged_in_as"] = email
         config["balance_eur"] = balance_eur
         config["balance_bfs"] = balance_bfs
-        _secure_write(_TG_CONFIG, json.dumps(config, indent=2))
+        _TG_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+        _TG_CONFIG.write_text(json.dumps(config, indent=2))
     except Exception:
         log.debug("tg config update failed", exc_info=True)
 

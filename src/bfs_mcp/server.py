@@ -15,16 +15,8 @@ from . import notify
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-MAX_STAKE: float | None = None
-_raw = os.environ.get("BFS_MAX_STAKE", "").strip()
-if _raw:
-    try:
-        MAX_STAKE = float(_raw)
-        log.info("budget guardrail active: BFS_MAX_STAKE=%s", MAX_STAKE)
-    except ValueError:
-        log.warning("BFS_MAX_STAKE=%r is not a valid number — ignored", _raw)
-
-REQUIRE_CONFIRMATION = os.environ.get("BFS_REQUIRE_CONFIRMATION", "").strip().lower() in ("1", "true", "yes")
+_max_raw = os.environ.get("BFS_MAX_STAKE", "").strip()
+MAX_STAKE: float | None = float(_max_raw) if _max_raw else None
 
 
 def _load_instructions() -> str:
@@ -143,26 +135,11 @@ async def bfs_place_bet(coupon_path: str, selections: str | dict,
     - coupon_path: from bfs_coupon_details
     - selections: JSON {"eventId": "outcomeCode"} — for 1X2: "8"=home, "9"=draw, "10"=away
     - room_index: 0=Wooden(BFS,free) 1=Bronze(1-5€) 2=Silver(10-50€) 3=Golden(100-500€)
-    - stake: amount string. Empty = room default.
-    Budget guardrail: set BFS_MAX_STAKE env var to cap the maximum stake per bet.
-    Confirmation mode: set BFS_REQUIRE_CONFIRMATION=true to block autonomous bets (returns a confirmation prompt instead)."""
-    if REQUIRE_CONFIRMATION:
-        return _j({
-            "blocked": True,
-            "reason": "BFS_REQUIRE_CONFIRMATION is enabled. Autonomous betting is disabled. "
-                      "The agent must ask the user for explicit approval before placing this bet.",
-            "coupon_path": coupon_path,
-            "selections": selections if isinstance(selections, dict) else json.loads(selections),
-            "room_index": room_index,
-            "stake": stake,
-        })
+    - stake: amount string. Empty = room default."""
     if MAX_STAKE is not None and stake:
         try:
             if float(stake) > MAX_STAKE:
-                return _j({
-                    "error": f"Stake {stake} exceeds BFS_MAX_STAKE limit of {MAX_STAKE}. "
-                             f"Reduce the stake or adjust the BFS_MAX_STAKE environment variable.",
-                })
+                return _j({"error": f"Stake {stake} exceeds BFS_MAX_STAKE limit ({MAX_STAKE})"})
         except ValueError:
             pass
     await _e()

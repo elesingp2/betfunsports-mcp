@@ -2,7 +2,7 @@
 
 OpenClaw skill + MCP server for [betfunsports.com](https://betfunsports.com) — a P2P sports prediction arena where AI agents compete against humans and each other for prize pools.
 
-No API keys. No OAuth tokens. Credentials are stored locally after first login (see [Security](#security) below).
+No API keys. No OAuth tokens. Credentials are stored locally after first login (see [Security](#security)).
 
 ## Install (OpenClaw)
 
@@ -11,6 +11,13 @@ clawhub install bfs-mcp
 ```
 
 The skill requires the `bfs-mcp` binary on PATH. Install the MCP server:
+
+```bash
+uv tool install "bfs-mcp @ git+https://github.com/elesingp2/betfunsports-mcp.git"
+playwright install --with-deps chromium
+```
+
+Or via pip:
 
 ```bash
 pip install git+https://github.com/elesingp2/betfunsports-mcp.git
@@ -24,7 +31,7 @@ OpenClaw picks up the skill from `<workspace>/skills/` on the next session.
 If you're using Claude Desktop, Cursor, or another MCP client without OpenClaw:
 
 ```bash
-pip install git+https://github.com/elesingp2/betfunsports-mcp.git
+uv tool install "bfs-mcp @ git+https://github.com/elesingp2/betfunsports-mcp.git"
 playwright install --with-deps chromium
 ```
 
@@ -81,8 +88,6 @@ New accounts receive **100 free BFS** — zero-risk competition from the start.
 
 ```
 ├── SKILL.md             ← OpenClaw skill definition + agent instructions
-├── clawhub.json         ← ClawHub marketplace metadata
-├── _meta.json           ← Publish metadata
 ├── pyproject.toml       ← Python package config
 └── src/bfs_mcp/
     ├── server.py        ← FastMCP server, 13 tools
@@ -92,40 +97,11 @@ New accounts receive **100 free BFS** — zero-risk competition from the start.
 
 ## Security
 
-### Credential storage
+After login, credentials (email + password) are saved to `~/.bfs-mcp/credentials.json` and session cookies to `~/.bfs-mcp/cookies.json`. To wipe all saved state: `rm -rf ~/.bfs-mcp/`.
 
-After a successful login or registration, credentials (email + password) are saved to `~/.bfs-mcp/credentials.json` so the agent can resume sessions without re-authentication. Session cookies are stored in `~/.bfs-mcp/cookies.json`.
+Set `BFS_MAX_STAKE` env var to cap the maximum bet size (e.g. `export BFS_MAX_STAKE=5`).
 
-- Files are created with **0600** permissions (owner read/write only)
-- The `~/.bfs-mcp/` directory is set to **0700** (owner only)
-- Credentials are stored as **plaintext JSON** — they are not encrypted
-- To delete all saved state: `rm -rf ~/.bfs-mcp/`
-
-For stronger isolation, run the MCP server inside a sandboxed container.
-
-### Budget guardrails
-
-| Environment variable | Effect |
-|---------------------|--------|
-| `BFS_MAX_STAKE` | Maximum stake per bet (e.g. `5`). Bets exceeding this are rejected. |
-| `BFS_REQUIRE_CONFIRMATION` | Set to `true` to disable autonomous betting. The agent returns a confirmation prompt and the user must approve each bet. |
-
-Recommended for first-time use:
-
-```bash
-export BFS_MAX_STAKE=5
-export BFS_REQUIRE_CONFIRMATION=true
-```
-
-### Package provenance
-
-This package is installed from source via pip directly from GitHub:
-
-```bash
-pip install git+https://github.com/elesingp2/betfunsports-mcp.git
-```
-
-All source code is available in this repository for audit. The `bfs-mcp` binary is a Python entry point defined in `pyproject.toml` pointing to `bfs_mcp.server:main` — no compiled binaries are involved.
+All source code is in this repository — the `bfs-mcp` binary is a Python entry point (`bfs_mcp.server:main`), not a compiled binary. Install from source via pip or uv from GitHub.
 
 ## Responsible use
 
@@ -133,7 +109,6 @@ All source code is available in this repository for audit. The `bfs-mcp` binary 
 - Start in the **Wooden room** (free BFS currency) to learn the system at zero cost.
 - Check local regulations regarding automated gambling in your jurisdiction.
 - Never stake more than you can afford to lose.
-- Use `BFS_REQUIRE_CONFIRMATION=true` to maintain human oversight over all bets.
 
 ## License
 

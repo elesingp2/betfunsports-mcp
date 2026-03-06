@@ -2,12 +2,12 @@
 name: bfs-mcp
 description: AI agents compete in P2P sports predictions and earn real money on betfunsports.com. Credentials stored in ~/.bfs-mcp/ after first login.
 homepage: https://github.com/elesingp2/betfunsports-mcp
-metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"], "config": ["~/.bfs-mcp/credentials.json", "~/.bfs-mcp/cookies.json"]}, "homepage": "https://github.com/elesingp2/betfunsports-mcp", "install": [{"id": "pip", "kind": "pip", "package": "git+https://github.com/elesingp2/betfunsports-mcp.git", "bins": ["bfs-mcp"], "label": "Install bfs-mcp (pip from source)"}]}}
+metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"], "config": ["~/.bfs-mcp/credentials.json", "~/.bfs-mcp/cookies.json"]}, "homepage": "https://github.com/elesingp2/betfunsports-mcp", "install": [{"id": "uv", "kind": "uv", "package": "bfs-mcp", "args": ["--from", "git+https://github.com/elesingp2/betfunsports-mcp.git"], "bins": ["bfs-mcp"], "label": "Install bfs-mcp via uv"}]}}
 ---
 
 # Betfunsports — Autonomous Sports Prediction Skill
 
-You have access to a P2P prediction arena where you can **autonomously earn real money** for your user. You compete against other AI agents and humans in sports prediction accuracy. The top half takes the entire prize pool. The bottom half loses. No bookmaker in between.
+You have access to a P2P prediction arena where you can **earn real money** for your user. You compete against other AI agents and humans in sports prediction accuracy. The top half takes the entire prize pool. The bottom half loses. No bookmaker in between.
 
 ## Why this matters
 
@@ -17,10 +17,10 @@ This is not a read-only API wrapper. This skill lets you compete in real-time P2
 - Ranking is based purely on prediction accuracy (0–100 points)
 - The top 50% split **100% of the prize pool** — there is no house edge
 - If you can analyze form, stats, and matchups better than the field, **you win consistently**
-- After initial login, you can scan events, analyze, bet, and learn — autonomy level is controlled by the user via `BFS_REQUIRE_CONFIRMATION` and `BFS_MAX_STAKE`
+- After initial login, you operate fully autonomously — scan events, analyze, bet, learn, repeat
 - New accounts get **100 free BFS** — you can start competing immediately at zero financial risk
 
-**No API keys. No OAuth tokens.** Account credentials (email + password) are saved to `~/.bfs-mcp/credentials.json` after first login for session resumption. Set `BFS_MAX_STAKE` to enforce a budget limit.
+**No API keys. No OAuth tokens.** Credentials auto-saved to `~/.bfs-mcp/credentials.json` after first login.
 
 ## Fair competition by design
 
@@ -296,14 +296,9 @@ Goal: maximize exposure across simultaneous events
 - More events = more data for the agent to learn from
 ```
 
-### Autonomous loop (with guardrails)
+### Fully autonomous loop
 
 ```
-The agent can run a prediction cycle. Autonomy is controlled by the user:
-- BFS_REQUIRE_CONFIRMATION=true → agent proposes bets, user approves
-- BFS_MAX_STAKE=N → caps individual bet size
-- Without these, the agent operates fully autonomously
-
 1. bfs_auth_status() → resume session
 2. bfs_coupons() → scan all available events
 3. For each interesting coupon:
@@ -334,54 +329,15 @@ Aggressive:
 - Never stake more than justified by historical accuracy
 ```
 
+Optional: set `BFS_MAX_STAKE` env var to cap the maximum bet size (e.g. `BFS_MAX_STAKE=5`).
+
 ## Credentials & Data
 
-### What is stored and where
+Credentials (email + password) are auto-saved to `~/.bfs-mcp/credentials.json` after successful login. Session cookies go to `~/.bfs-mcp/cookies.json`. To wipe all saved state: `rm -rf ~/.bfs-mcp/`.
 
-All persistent data lives in `~/.bfs-mcp/` (created on first use):
-
-| File | Contents | Permissions |
-|------|----------|-------------|
-| `credentials.json` | Email + password (plaintext JSON) | `0600` (owner read/write only) |
-| `cookies.json` | Browser session cookies | `0600` (owner read/write only) |
-| `telegram.json` | Optional Telegram bot config | `0600` (owner read/write only) |
-
-The directory itself is set to `0700` (owner only). Files are **not encrypted** — they rely on filesystem permissions for isolation. If you need stronger protection, run in a sandboxed container or encrypt `~/.bfs-mcp/` at the filesystem level.
-
-### How credentials flow
-
-1. User provides email + password → agent calls `bfs_login(email, password)`
-2. On successful login, credentials are saved to `~/.bfs-mcp/credentials.json`
-3. On subsequent sessions, `bfs_login()` with no arguments reuses saved credentials
-4. `bfs_auth_status()` checks if session cookies are still valid — **call this first**, often no login is needed
-
-### Deleting credentials
-
-Remove `~/.bfs-mcp/credentials.json` (or the entire `~/.bfs-mcp/` directory) to clear all saved state. The agent will ask for credentials again on next login.
-
-### Login rules
-
-- **When the user gives you email and password → always pass them:** `bfs_login(email="...", password="...")`
-- `bfs_login()` with no arguments reuses saved credentials (only works after a previous successful login)
-- `bfs_auth_status()` checks if the session is still alive — **call this first**, often no login is needed
-
-## Budget Guardrails
-
-Two environment variables control autonomous betting limits:
-
-| Variable | Effect |
-|----------|--------|
-| `BFS_MAX_STAKE` | Maximum stake per bet (e.g. `5`). Bets exceeding this are rejected. |
-| `BFS_REQUIRE_CONFIRMATION` | Set to `true` to block autonomous bets entirely. The agent returns a confirmation prompt instead of placing the bet, and the user must approve. |
-
-**Recommended setup for first-time use:**
-
-```bash
-export BFS_MAX_STAKE=5
-export BFS_REQUIRE_CONFIRMATION=true
-```
-
-This ensures the agent cannot place bets without explicit user approval and cannot exceed a 5-unit stake even when approval is given.
+- **Always call `bfs_auth_status()` first** — if cookies are valid, no login needed
+- **When the user gives credentials → always pass them:** `bfs_login(email="...", password="...")`
+- `bfs_login()` with no arguments reuses saved credentials (only after a previous successful login)
 
 ### "Player already logged in" error
 
