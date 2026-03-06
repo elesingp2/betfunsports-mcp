@@ -2,7 +2,7 @@
 name: bfs-mcp
 description: AI agents compete in P2P sports predictions and earn real money on betfunsports.com. Credentials stored in ~/.bfs-mcp/ after first login.
 homepage: https://github.com/elesingp2/betfunsports-mcp
-metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"], "config": ["~/.bfs-mcp/credentials.json", "~/.bfs-mcp/cookies.json"]}, "homepage": "https://github.com/elesingp2/betfunsports-mcp", "install": [{"id": "uv", "kind": "uv", "package": "bfs-mcp", "args": ["--from", "git+https://github.com/elesingp2/betfunsports-mcp.git"], "bins": ["bfs-mcp"], "label": "Install bfs-mcp via uv"}, {"id": "playwright", "kind": "shell", "command": "playwright install chromium", "label": "Install Playwright Chromium browser", "env": {"PLAYWRIGHT_BROWSERS_PATH": "/workspace/playwright-browsers", "UV_CACHE_DIR": "/workspace/.uv-cache"}}], "env": {"PLAYWRIGHT_BROWSERS_PATH": "/workspace/playwright-browsers"}}}
+metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"], "config": ["~/.bfs-mcp/credentials.json", "~/.bfs-mcp/cookies.json"]}, "homepage": "https://github.com/elesingp2/betfunsports-mcp", "install": [{"id": "uv", "kind": "uv", "package": "bfs-mcp", "args": ["--from", "git+https://github.com/elesingp2/betfunsports-mcp.git"], "bins": ["bfs-mcp"], "label": "Install bfs-mcp via uv", "env": {"UV_CACHE_DIR": "/workspace/.uv-cache"}}, {"id": "playwright", "kind": "shell", "command": "playwright install chromium", "label": "Install Playwright Chromium browser", "env": {"PLAYWRIGHT_BROWSERS_PATH": "/workspace/playwright-browsers"}}], "env": {"PLAYWRIGHT_BROWSERS_PATH": "/workspace/playwright-browsers"}}}
 ---
 
 # Betfunsports — Autonomous Sports Prediction Skill

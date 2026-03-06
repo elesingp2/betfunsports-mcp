@@ -15,48 +15,15 @@ clawhub install bfs-mcp
 The skill requires the `bfs-mcp` binary on PATH. Install the MCP server:
 
 ```bash
-export UV_CACHE_DIR=/workspace/.uv-cache
-export PLAYWRIGHT_BROWSERS_PATH=/workspace/playwright-browsers
-
 uv tool install "bfs-mcp @ git+https://github.com/elesingp2/betfunsports-mcp.git"
 playwright install chromium
-```
-
-Or use the bundled install script that handles environment setup automatically:
-
-```bash
-./install.sh
 ```
 
 Or via pip:
 
 ```bash
-export PLAYWRIGHT_BROWSERS_PATH=/workspace/playwright-browsers
 pip install git+https://github.com/elesingp2/betfunsports-mcp.git
 playwright install chromium
-```
-
-**Important:** After installing, make sure `~/.local/bin` is on your `PATH`:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-OpenClaw picks up the skill from `<workspace>/skills/` on the next session.
-
-When registering the MCP server in your client config, include the environment variables:
-
-```json
-{
-  "mcpServers": {
-    "bfs": {
-      "command": "bfs-mcp",
-      "env": {
-        "PLAYWRIGHT_BROWSERS_PATH": "/workspace/playwright-browsers"
-      }
-    }
-  }
-}
 ```
 
 ## Install (standalone MCP)
@@ -64,7 +31,6 @@ When registering the MCP server in your client config, include the environment v
 If you're using Claude Desktop, Cursor, or another MCP client without OpenClaw:
 
 ```bash
-export PLAYWRIGHT_BROWSERS_PATH=/workspace/playwright-browsers
 uv tool install "bfs-mcp @ git+https://github.com/elesingp2/betfunsports-mcp.git"
 playwright install chromium
 ```
@@ -123,7 +89,6 @@ New accounts receive **100 free BFS** — zero-risk competition from the start.
 ```
 ├── SKILL.md             ← OpenClaw skill definition + agent instructions
 ├── pyproject.toml       ← Python package config
-├── install.sh           ← Install script (handles env setup automatically)
 └── src/bfs_mcp/
     ├── server.py        ← FastMCP server, 13 tools
     ├── browser.py       ← Playwright engine (headless Chromium)
@@ -159,55 +124,12 @@ All source code is in this repository — the `bfs-mcp` binary is a Python entry
 
 ## Troubleshooting
 
-### `uv tool install` fails with "Permission denied" on cache
-
-The `uv` cache directory (e.g. `/tmp/.tool-cache/uv/`) may be owned by a different user. Set `UV_CACHE_DIR` to a writable path before installing:
-
-```bash
-export UV_CACHE_DIR=/workspace/.uv-cache
-uv tool install "bfs-mcp @ git+https://github.com/elesingp2/betfunsports-mcp.git"
-```
-
-### Chromium won't start — missing system libraries
-
-Playwright's Chromium requires system libraries (`libnspr4`, `libnss3`, `libatk-bridge-2.0`, `libgbm1`, `libxkbcommon`, `libasound2`, `libdrm2`, `libwayland-server0`, etc.). If you have `sudo`:
-
-```bash
-playwright install-deps chromium
-```
-
-Without `sudo`, download the required `.deb` packages from a Debian mirror, extract the `.so` files, and set `LD_LIBRARY_PATH`:
-
-```bash
-mkdir -p /workspace/debs && cd /workspace/debs
-# Download and extract packages (example for Debian bookworm, amd64):
-apt-get download libnspr4 libnss3 libatk-bridge2.0-0 libgbm1 libxkbcommon0 libasound2 libdrm2
-for f in *.deb; do dpkg-deb -x "$f" extracted; done
-export LD_LIBRARY_PATH=/workspace/debs/extracted/usr/lib/x86_64-linux-gnu
-```
-
-Then include `LD_LIBRARY_PATH` in your MCP server config's `env` section.
-
-### `PLAYWRIGHT_BROWSERS_PATH` points to unwritable location
-
-Some environments pre-set `PLAYWRIGHT_BROWSERS_PATH` to a system path like `/opt/playwright-browsers`. Override it:
-
-```bash
-export PLAYWRIGHT_BROWSERS_PATH=/workspace/playwright-browsers
-playwright install chromium
-```
-
-Include this variable in your MCP server config so the runtime can find the browser.
-
-### `bfs-mcp` command not found after install
-
-`uv tool install` places binaries in `~/.local/bin/`, which may not be on your `PATH`:
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-Add this to `~/.bashrc` to make it permanent.
+| Problem | Fix |
+|---------|-----|
+| `uv tool install` → Permission denied on `/tmp/.tool-cache/uv/` | `export UV_CACHE_DIR=/workspace/.uv-cache` before install |
+| `PLAYWRIGHT_BROWSERS_PATH` points to unwritable `/opt/playwright-browsers` | `export PLAYWRIGHT_BROWSERS_PATH=/workspace/playwright-browsers` and re-run `playwright install chromium` |
+| Chromium won't start — missing `libnspr4`, `libnss3`, `libgbm1`, etc. | With sudo: `playwright install-deps chromium`. Without sudo: download `.deb` packages, extract `.so` files, set `LD_LIBRARY_PATH` |
+| `bfs-mcp` command not found after install | `export PATH="$HOME/.local/bin:$PATH"` |
 
 ## Responsible use
 
