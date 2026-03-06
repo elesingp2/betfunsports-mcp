@@ -394,8 +394,8 @@ class BFSBrowser:
 
     async def active_bets(self) -> str:
         """Get currently active (unresolved) bets as formatted text."""
-        await self._goto_user_page("/user/bets")
-        return await self._format_bet_table("Active bets")
+        await self._goto_user_page("/user/bets/archive")
+        return await self._format_bet_table("Active bets", only_active=True)
 
     async def _goto_user_page(self, path: str) -> None:
         """Navigate to a /user/* page, retrying via JS if page.goto gets aborted."""
@@ -420,7 +420,7 @@ class BFSBrowser:
         if final != expected:
             log.warning("JS navigation landed on %s instead of %s", final, expected)
 
-    async def _format_bet_table(self, title_label: str) -> str:
+    async def _format_bet_table(self, title_label: str, *, only_active: bool = False) -> str:
         try:
             await self.page.wait_for_load_state("domcontentloaded", timeout=10_000)
         except Exception:
@@ -451,6 +451,12 @@ class BFSBrowser:
         }""")
         headers = data.get("headers", [])
         rows = data.get("rows", [])
+
+        if only_active and rows and headers:
+            points_idx = next((i for i, h in enumerate(headers) if h.lower() == "points"), None)
+            if points_idx is not None:
+                rows = [r for r in rows if points_idx < len(r) and r[points_idx].strip() in ("-", "")]
+
         if not rows:
             page_text = data.get("page_text", "")
             return f"{title_label}: none found.\nURL: {url}\nPage content: {page_text[:1500]}"
