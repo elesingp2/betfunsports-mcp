@@ -204,10 +204,57 @@ async def bfs_screenshot(full_page: bool = False) -> Image:
     return Image(data=data, format="png")
 
 
+_DATA = Path.home() / ".bfs-mcp"
+_LIB_DIR = _DATA / "lib"
+_BROWSERS_DEFAULT = str(_DATA / "browsers")
+_DEB_PKGS = [
+    "libnspr4", "libnss3", "libgbm1", "libxkbcommon0", "libasound2",
+    "libatk-bridge2.0-0", "libatspi2.0-0", "libdrm2", "libwayland-server0",
+]
+
+
 def setup():
-    """Install Playwright Chromium using the same Python env as bfs-mcp."""
     import subprocess, sys
-    sys.exit(subprocess.call([sys.executable, "-m", "playwright", "install", "chromium"]))
+
+    browsers = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
+    if not browsers or not os.access(str(Path(browsers).parent), os.W_OK):
+        browsers = _BROWSERS_DEFAULT
+        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = browsers
+
+    rc = subprocess.call([sys.executable, "-m", "playwright", "install", "chromium"])
+    if rc != 0:
+        sys.exit(rc)
+
+    if sys.platform == "linux":
+        _fix_system_libs(browsers)
+
+
+def _fix_system_libs(browsers_path: str) -> None:
+    import subprocess, glob, shutil, tempfile
+
+    bins = glob.glob(f"{browsers_path}/**/chrome-headless-shell", recursive=True) \
+         + glob.glob(f"{browsers_path}/**/chrome", recursive=True)
+    if not bins:
+        return
+
+    out = subprocess.run(["ldd", bins[0]], capture_output=True, text=True).stdout
+    missing = [l.split()[0] for l in out.splitlines() if "not found" in l]
+    if not missing:
+        return
+
+    _LIB_DIR.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run(["apt-get", "download"] + _DEB_PKGS, cwd=tmp, capture_output=True)
+        debs = glob.glob(f"{tmp}/*.deb")
+        if not debs:
+            print(f"apt-get download failed. Extract these to {_LIB_DIR}:")
+            print(f"  {' '.join(_DEB_PKGS)}")
+            return
+        for deb in debs:
+            subprocess.run(["dpkg-deb", "-x", deb, tmp], capture_output=True)
+        for so in Path(tmp).rglob("*.so*"):
+            if so.is_file():
+                shutil.copy2(so, _LIB_DIR / so.name)
 
 
 def main():
