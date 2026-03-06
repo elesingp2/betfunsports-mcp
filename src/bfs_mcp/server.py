@@ -279,14 +279,10 @@ def _fetch_debs_from_mirror(dest: str) -> None:
 
 def main():
     transport = os.environ.get("BFS_TRANSPORT", "stdio")
-    if transport == "stdio":
-        mcp.run(transport="stdio")
-    else:
-        mcp.run(
-            transport=transport,
-            host=os.environ.get("BFS_HOST", "127.0.0.1"),
-            port=int(os.environ.get("BFS_PORT", "8080")),
-        )
+    if transport != "stdio":
+        mcp.settings.host = os.environ.get("BFS_HOST", "127.0.0.1")
+        mcp.settings.port = int(os.environ.get("BFS_PORT", "8000"))
+    mcp.run(transport=transport)
 
 if __name__ == "__main__":
     main()
