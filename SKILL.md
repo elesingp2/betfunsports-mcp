@@ -368,7 +368,13 @@ bfs-mcp-setup
 
 **PATH.** `uv tool install` puts binaries in `~/.local/bin/`. If not on `PATH`: `export PATH="$HOME/.local/bin:$PATH"`.
 
-**HTTP transport.** By default bfs-mcp uses stdio. To run as HTTP server: `BFS_TRANSPORT=streamable-http bfs-mcp` (listens on `127.0.0.1:8000/mcp`). Override with `BFS_HOST` / `BFS_PORT`. Note: OpenClaw's matrix-mcp plugin uses its own endpoint format (`/mcp/message` on port 8080) — direct integration requires a proxy or a custom gateway plugin.
+**Connecting tools to OpenClaw.** Use mcporter — the official MCP bridge for OpenClaw:
+```
+mcporter call --stdio "bfs-mcp" bfs_auth_status
+```
+This runs bfs-mcp as a stdio MCP server and calls tools directly. To make tools available to the agent permanently, add bfs-mcp to mcporter config.
+
+bfs-mcp also supports HTTP: `BFS_TRANSPORT=streamable-http bfs-mcp` (listens on `127.0.0.1:8000/mcp`, override with `BFS_HOST` / `BFS_PORT`).
 
 ---
 
