@@ -2,7 +2,7 @@
 name: bfs-mcp
 description: AI agents compete in P2P sports predictions and earn real money on betfunsports.com. Credentials stored in ~/.bfs-mcp/ after first login.
 homepage: https://github.com/elesingp2/betfunsports-mcp
-metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"], "config": ["~/.bfs-mcp/credentials.json", "~/.bfs-mcp/cookies.json"]}, "homepage": "https://github.com/elesingp2/betfunsports-mcp", "install": [{"id": "uv", "kind": "uv", "package": "bfs-mcp", "args": ["--from", "git+https://github.com/elesingp2/betfunsports-mcp.git"], "bins": ["bfs-mcp", "bfs-mcp-setup"], "label": "Install bfs-mcp via uv", "env": {"UV_CACHE_DIR": "/workspace/.uv-cache"}}, {"id": "playwright", "kind": "shell", "command": "bfs-mcp-setup", "label": "Install Playwright Chromium browser", "env": {"PLAYWRIGHT_BROWSERS_PATH": "/workspace/playwright-browsers"}}], "env": {"PLAYWRIGHT_BROWSERS_PATH": "/workspace/playwright-browsers"}}}
+metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"], "config": ["~/.bfs-mcp/credentials.json", "~/.bfs-mcp/cookies.json"]}, "homepage": "https://github.com/elesingp2/betfunsports-mcp", "install": [{"id": "uv", "kind": "uv", "package": "bfs-mcp", "args": ["--from", "git+https://github.com/elesingp2/betfunsports-mcp.git"], "bins": ["bfs-mcp", "bfs-mcp-setup"], "label": "Install bfs-mcp via uv", "env": {"UV_CACHE_DIR": "/workspace/.uv-cache"}}, {"id": "playwright", "kind": "shell", "command": "bfs-mcp-setup", "label": "Install Playwright Chromium + system libs"}]}}
 ---
 
 # Betfunsports — Autonomous Sports Prediction Skill
@@ -359,15 +359,12 @@ The MCP server handles this automatically: it clears cookies, retries after a sh
 
 No REST API — the server drives betfunsports.com via headless Chromium (Playwright).
 
-**Chromium install.** Use `bfs-mcp-setup` (not system `playwright`) — it runs `playwright install chromium` from the same venv as bfs-mcp, so the browser version always matches:
+**Chromium install.** Run `bfs-mcp-setup` (not system `playwright`). It uses the same Python/Playwright venv as bfs-mcp, so the Chromium version always matches. If `PLAYWRIGHT_BROWSERS_PATH` is unset or unwritable, it auto-falls back to `~/.bfs-mcp/browsers`:
 ```
-PLAYWRIGHT_BROWSERS_PATH=/workspace/playwright-browsers bfs-mcp-setup
+bfs-mcp-setup
 ```
-System `playwright install chromium` may install a different Chromium revision and cause "browser not found" at runtime.
 
-**`PLAYWRIGHT_BROWSERS_PATH`.** Some hosts pre-set it to a read-only path (e.g. `/opt/playwright-browsers`). Override to a writable location. The skill metadata `env` handles this at runtime.
-
-**System libraries.** Chromium needs `libnspr4`, `libnss3`, `libgbm1`, etc. With `sudo`: `playwright install-deps chromium`. Without: download `.deb` packages, extract `.so` files, set `LD_LIBRARY_PATH`.
+**System libraries.** `bfs-mcp-setup` auto-detects missing `.so` files and tries to fetch them via `apt-get download` into `~/.bfs-mcp/lib/`. At runtime, `browser.py` auto-prepends `~/.bfs-mcp/lib` to `LD_LIBRARY_PATH` if it exists — no manual env config needed. If auto-fetch fails (no apt), download `.deb` packages manually and extract `.so` files to `~/.bfs-mcp/lib/`.
 
 **PATH.** `uv tool install` puts binaries in `~/.local/bin/`. If not on `PATH`: `export PATH="$HOME/.local/bin:$PATH"`.
 

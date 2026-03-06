@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,20 @@ UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
+
+_LIB_DIR = DATA_DIR / "lib"
+_BROWSERS_DIR = DATA_DIR / "browsers"
+
+
+def _ensure_env() -> None:
+    """Set LD_LIBRARY_PATH and PLAYWRIGHT_BROWSERS_PATH from ~/.bfs-mcp if needed."""
+    if _LIB_DIR.is_dir():
+        ld = os.environ.get("LD_LIBRARY_PATH", "")
+        if str(_LIB_DIR) not in ld:
+            os.environ["LD_LIBRARY_PATH"] = f"{_LIB_DIR}:{ld}" if ld else str(_LIB_DIR)
+    browsers = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "")
+    if (not browsers or not Path(browsers).exists()) and _BROWSERS_DIR.exists():
+        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(_BROWSERS_DIR)
 
 
 @dataclass
@@ -60,6 +75,7 @@ class BFSBrowser:
     async def start(self) -> None:
         if self.ready:
             return
+        _ensure_env()
         self._pw = await async_playwright().start()
         self._browser = await self._pw.chromium.launch(headless=True)
         self._ctx = await self._browser.new_context(viewport={"width": 1920, "height": 1080}, user_agent=UA)
