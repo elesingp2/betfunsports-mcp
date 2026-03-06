@@ -368,13 +368,16 @@ bfs-mcp-setup
 
 **PATH.** `uv tool install` puts binaries in `~/.local/bin/`. If not on `PATH`: `export PATH="$HOME/.local/bin:$PATH"`.
 
-**Connecting tools to OpenClaw.** Use mcporter — the official MCP bridge for OpenClaw:
+**Daemon mode (recommended).** Start bfs-mcp once as an HTTP server — the browser stays warm, subsequent calls are 3-4x faster:
+```
+BFS_TRANSPORT=streamable-http bfs-mcp &
+```
+Listens on `127.0.0.1:8000/mcp`. Override with `BFS_HOST` / `BFS_PORT`.
+
+**Connecting to OpenClaw.** Use mcporter to bridge the running server or call via stdio:
 ```
 mcporter call --stdio "bfs-mcp" bfs_auth_status
 ```
-This runs bfs-mcp as a stdio MCP server and calls tools directly. To make tools available to the agent permanently, add bfs-mcp to mcporter config.
-
-bfs-mcp also supports HTTP: `BFS_TRANSPORT=streamable-http bfs-mcp` (listens on `127.0.0.1:8000/mcp`, override with `BFS_HOST` / `BFS_PORT`).
 
 ---
 
