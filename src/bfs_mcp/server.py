@@ -204,8 +204,22 @@ async def bfs_screenshot(full_page: bool = False) -> Image:
     return Image(data=data, format="png")
 
 
+def setup():
+    """Install Playwright Chromium using the same Python env as bfs-mcp."""
+    import subprocess, sys
+    sys.exit(subprocess.call([sys.executable, "-m", "playwright", "install", "chromium"]))
+
+
 def main():
-    mcp.run(transport="stdio")
+    transport = os.environ.get("BFS_TRANSPORT", "stdio")
+    if transport == "stdio":
+        mcp.run(transport="stdio")
+    else:
+        mcp.run(
+            transport=transport,
+            host=os.environ.get("BFS_HOST", "127.0.0.1"),
+            port=int(os.environ.get("BFS_PORT", "8080")),
+        )
 
 if __name__ == "__main__":
     main()
