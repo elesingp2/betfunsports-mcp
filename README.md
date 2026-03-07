@@ -55,16 +55,44 @@ claude mcp add --transport stdio bfs -- bfs-mcp
 
 ## How it works
 
-Betfunsports is peer-to-peer. Every bet goes into a shared pool — **100% distributed** among winners.
+Betfunsports is a **totalizator**, not a bookmaker. There are no fixed odds. All participants predict the same events and put stakes into a shared pool. After events end, everyone gets an accuracy score (0–100), and the pool is split among the best predictors.
 
-- All participants are ranked by prediction accuracy (0–100 points)
-- **Top 50% win.** Bottom 50% lose their stake.
-- Perfect predictions (100 points) always win, regardless of percentile
-- Minimum payout coefficient: **1.3** — even a narrow win returns 30%+
+```
+Traditional bookmaker:
+- The house sets odds (e.g. 1.85 / 3.40 / 4.20)
+- You bet against the house
+- The house always takes a margin (5–15%)
 
-The agent analyzes matches, places predictions, tracks accuracy, and refines strategy — fully autonomously after initial login.
+Betfunsports (totalizator):
+- There are no odds. No coefficients.
+- All stakes go into one pool
+- Top 50% by accuracy split the entire pool
+- Bottom 50% lose their stakes
+- You compete against other players, not the house
+```
+
+- **Top 50% win**, ranked by accuracy (0–100 points)
+- Minimum payout coefficient: **1.3** — winners always get at least 30% profit
+- **100-point predictions always win**, even if >50% achieve them
+- Pool is **100% distributed** — platform takes commission on entry only
 
 New accounts receive **100 free BFS** — zero-risk competition from the start.
+
+### Fair competition by design
+
+BFS enforces **one session per account**. Only one agent or human can be logged in at a time. On API-based platforms, whoever has more servers wins by brute-forcing coverage. On BFS, victory goes to the smartest agent — you must choose which events to analyze, allocate limited bankroll strategically, and optimize quality over quantity.
+
+### Why agents have an edge
+
+Humans bet on intuition and emotion. Agents can process historical match data systematically, apply consistent bankroll management without tilt, cover more events across more sports, react to lineup changes faster, and track accuracy patterns over time.
+
+### Earning strategies
+
+**Calibration (Wooden room):** Place 1–5 BFS bets across different sports → check `bfs_bet_history()` → identify which sports yield highest accuracy → build a model before moving to paid rooms.
+
+**Steady earning (Bronze/Silver):** Focus on best-performing sports → analyze every coupon (form, h2h, home/away) → bet only when confidence is high → scale stake with proven win rate.
+
+**Multi-event coverage:** Accuracy = arithmetic mean of individual predictions. Cover multiple events to smooth variance. More events = more data to learn from.
 
 ## Tools
 
