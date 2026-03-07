@@ -135,12 +135,26 @@ New accounts get **100 free BFS** — the agent can start competing immediately 
 
 ## Workflow
 
+### New user (no account yet)
+
 ```
-1. bfs_auth_status()                               → check session; if authenticated: true → skip to step 3
-2. bfs_login(email, password)                      → authenticate (credentials auto-saved)
-   ↳ "Player already logged in"?                   → call bfs_logout() first, then retry bfs_login()
+1. ASK THE USER for: email, desired username, password, first name, last name, birth date, phone
+   ⚠ NEVER invent an email or use a placeholder — registration requires real email confirmation
+2. bfs_register(username, email, password, ...)    → create account on betfunsports.com
+3. TELL THE USER: "Check your inbox for a confirmation email from betfunsports.com and paste the link here."
+4. bfs_confirm_registration(url)                   → activate account using the link the user gives you
+5. bfs_login(email, password)                      → log in (credentials auto-saved for future sessions)
+6. TELL THE USER: "You're logged in. You have 100 free BFS. I can browse matches and place predictions — want me to start?"
+```
+
+### Returning user (has account)
+
+```
+1. bfs_auth_status()                               → if authenticated: true → skip to step 3
+2. bfs_login(email, password)                      → authenticate
+   ↳ "Player already logged in"?                   → call bfs_logout() first, then retry
 3. bfs_coupons()                                   → browse available events
-4. bfs_coupon_details("/FOOTBALL/.../18638")       → get match details + outcomes + rooms
+4. bfs_coupon_details(path)                        → get match details + outcomes + rooms
 5. bfs_place_bet(coupon_path, selections, 0, "5")  → place bet (stake must be within room range)
 6. bfs_bet_history()                               → review past results + accuracy scores
 ```
@@ -154,7 +168,7 @@ New accounts get **100 free BFS** — the agent can start competing immediately 
 | `bfs_auth_status()` | Check session + balances. **Call first.** |
 | `bfs_login(email, password)` | Login. **Always pass credentials when the user provides them.** Omit both to reuse saved creds. |
 | `bfs_logout()` | End session |
-| `bfs_register(username, email, password, first_name, last_name, birth_date, phone, ...)` | Create account (DD/MM/YYYY). Needs email confirmation. |
+| `bfs_register(username, email, password, first_name, last_name, birth_date, phone, ...)` | Create account (DD/MM/YYYY). **Always ask the user for their real email first** — never invent one. Needs email confirmation. |
 | `bfs_confirm_registration(url)` | Visit confirmation link from email |
 
 ### Login rules
@@ -263,13 +277,12 @@ Match score by sets
 ### Calibration phase (Wooden room)
 
 ```
-Goal: learn accuracy scoring patterns at zero cost
+Goal: learn accuracy scoring patterns at zero cost (100 free BFS on new accounts)
 
-1. Register → get 100 free BFS
-2. Place 1–5 BFS bets across different sports
-3. After results: call bfs_bet_history() and analyze accuracy scores
-4. Identify which sports and coupon types yield highest accuracy
-5. Build a model of what works before moving to paid rooms
+1. Place 1–5 BFS bets across different sports
+2. After results: call bfs_bet_history() and analyze accuracy scores
+3. Identify which sports and coupon types yield highest accuracy
+4. Build a model of what works before moving to paid rooms
 ```
 
 ### Steady earning (Bronze / Silver)
@@ -293,19 +306,6 @@ Goal: maximize exposure across simultaneous events
 - Cover multiple events to smooth variance
 - Mix high-confidence picks with calculated risks
 - More events = more data for the agent to learn from
-```
-
-### Fully autonomous loop
-
-```
-1. bfs_auth_status() → resume session
-2. bfs_coupons() → scan all available events
-3. For each interesting coupon:
-   - bfs_coupon_details() → analyze matchup
-   - Decide outcome + confidence level
-   - bfs_place_bet() with appropriate room and stake
-4. bfs_bet_history() → review results, adjust strategy
-5. Repeat
 ```
 
 ## Risk Management
