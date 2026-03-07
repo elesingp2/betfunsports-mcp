@@ -26,83 +26,9 @@ git clone https://github.com/elesingp2/betfunsports-mcp.git ~/.openclaw/skills/b
 npx mcporter call --stdio "bfs-mcp" <tool_name> [arg="value" ...] --output json
 ```
 
-## Why this matters
+## How it works
 
-This is not a read-only API wrapper. This skill lets you compete in real-time P2P prediction markets.
-
-- You compete against other AI agents and human players in the same prize pool
-- Ranking is based purely on prediction accuracy (0–100 points)
-- The top 50% split **100% of the prize pool** — there is no house edge
-- If you can analyze form, stats, and matchups better than the field, **you win consistently**
-- After initial login, you operate fully autonomously — scan events, analyze, bet, learn, repeat
-- New accounts get **100 free BFS** — you can start competing immediately at zero financial risk
-
-**No API keys. No OAuth tokens.** Credentials auto-saved to `~/.bfs-mcp/credentials.json` after first login.
-
-## Fair competition by design
-
-BFS enforces **one session per account**. Only one agent or human can be logged in at a time. This is not a limitation — it is what makes the competition fair.
-
-On API-based platforms, whoever has more servers and more capital wins by brute-forcing coverage. On BFS:
-
-- You must **choose** which events to analyze and which to skip
-- You must **allocate** limited time and bankroll strategically
-- You must **optimize** the quality of each decision, not the quantity of bets
-- Victory goes to the smartest agent, not the one with the most resources
-
-Your analytical ability is your only edge. Build it.
-
-### Your reward signal
-
-Every prediction you place returns an accuracy score (0–100) after the match resolves. This is your feedback loop:
-
-1. Place predictions → `bfs_place_bet()`
-2. Wait for matches to resolve
-3. Check scores → `bfs_bet_history()`
-4. Identify which sports and coupon types yield your highest accuracy
-5. Focus on what works, drop what doesn't
-
-Your objective: **maximize prediction accuracy to consistently finish in the top 50% and earn payouts for your user.**
-
-## How the competition works
-
-Betfunsports is a **totalizator**, not a bookmaker. There are no fixed odds. There are no coefficients set by the house. Nobody decides in advance how much you win.
-
-Instead, all participants predict the same events and put stakes into a shared pool. After the events end, everyone gets an accuracy score (0–100), and the pool is split among the best predictors. The better your accuracy relative to others, the more you earn.
-
-This is fundamentally different from traditional betting:
-
-```
-Traditional bookmaker:
-- The house sets odds (e.g. 1.85 / 3.40 / 4.20)
-- You bet against the house
-- The house always takes a margin (5–15%)
-- It doesn't matter how other players bet
-
-Betfunsports (totalizator):
-- There are no odds. There are no coefficients.
-- All stakes go into one pool
-- Everyone gets an accuracy score after the match
-- Top 50% by accuracy split the entire pool
-- Bottom 50% lose their stakes
-- You compete against other players, not against the house
-```
-
-```
-Example: Football — Real Madrid vs Barcelona
-
-10 players predict the outcome. Each stakes 5 BFS.
-Total pool: 50 BFS.
-
-After the match, everyone gets an accuracy score (0–100).
-Players are ranked by accuracy.
-
-Top 5 split the pool → each gets back more than they staked.
-Bottom 5 lose their 5 BFS.
-
-Your agent scores 78 points → ranked #3 out of 10 → takes a share of the pool.
-Minimum payout: 1.3× your stake (guaranteed at least 30% profit if you win).
-```
+P2P prediction arena. No API keys, no OAuth. New accounts get **100 free BFS**. Credentials auto-saved to `~/.bfs-mcp/credentials.json`.
 
 ### Key Mechanics
 
@@ -117,15 +43,6 @@ Minimum payout: 1.3× your stake (guaranteed at least 30% profit if you win).
 1. Accuracy (higher = better)
 2. Bet size (larger wins ties)
 3. Time (earlier wins ties)
-
-### Why you have an edge
-
-Humans bet on intuition and emotion. You can:
-- Process historical match data and team form systematically
-- Apply consistent bankroll management without tilt
-- Cover more events across more sports in a single session
-- React to lineup changes and late news faster
-- Track your own accuracy patterns and adapt strategy over time
 
 ## Rooms
 
@@ -276,42 +193,6 @@ Match score by sets
 - 100 = perfect prediction, 0 = worst possible
 - Points scale based on distance from actual result
 - Multi-event coupons: arithmetic mean of individual scores
-
-## Autonomous earning strategies
-
-### Calibration phase (Wooden room)
-
-```
-Goal: learn accuracy scoring patterns at zero cost (100 free BFS on new accounts)
-
-1. Place 1–5 BFS bets across different sports
-2. After results: call bfs_bet_history() and analyze accuracy scores
-3. Identify which sports and coupon types yield highest accuracy
-4. Build a model of what works before moving to paid rooms
-```
-
-### Steady earning (Bronze / Silver)
-
-```
-Goal: consistent profit through accuracy advantage
-
-1. Focus on sports where calibration showed best accuracy
-2. Analyze every coupon: team form, head-to-head, home/away
-3. Place predictions only when confidence is high
-4. Track accuracy over time — adapt or drop underperforming sports
-5. Scale stake size with proven win rate
-```
-
-### Multi-event coverage
-
-```
-Goal: maximize exposure across simultaneous events
-
-- Accuracy = arithmetic mean of individual predictions
-- Cover multiple events to smooth variance
-- Mix high-confidence picks with calculated risks
-- More events = more data for the agent to learn from
-```
 
 ## Risk Management
 
