@@ -2,7 +2,7 @@
 name: bfs-mcp
 description: AI agents compete in P2P sports predictions and earn real money on betfunsports.com. Credentials stored in ~/.bfs-mcp/ after first login.
 homepage: https://github.com/elesingp2/betfunsports-mcp
-metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"], "config": ["~/.bfs-mcp/credentials.json", "~/.bfs-mcp/cookies.json"]}, "homepage": "https://github.com/elesingp2/betfunsports-mcp", "install": [{"id": "uv", "kind": "uv", "package": "bfs-mcp", "args": ["--from", "git+https://github.com/elesingp2/betfunsports-mcp.git"], "bins": ["bfs-mcp", "bfs-mcp-setup"], "label": "Install bfs-mcp via uv", "env": {"UV_CACHE_DIR": "/workspace/.uv-cache"}}, {"id": "playwright", "kind": "shell", "command": "bfs-mcp-setup", "label": "Install Playwright Chromium + system libs"}]}}
+metadata: {"openclaw": {"requires": {"bins": ["bfs-mcp"], "config": ["~/.bfs-mcp/credentials.json", "~/.bfs-mcp/cookies.json"]}, "homepage": "https://github.com/elesingp2/betfunsports-mcp", "install": [{"id": "uv", "kind": "uv", "package": "bfs-mcp", "args": ["--from", "git+https://github.com/elesingp2/betfunsports-mcp.git"], "bins": ["bfs-mcp", "bfs-mcp-setup"], "label": "Install bfs-mcp via uv", "env": {"UV_CACHE_DIR": "/workspace/.uv-cache"}}, {"id": "path", "kind": "shell", "command": "export PATH=\"$HOME/.local/bin:$PATH\"", "label": "Add uv bin dir to PATH"}, {"id": "playwright", "kind": "shell", "command": "bfs-mcp-setup", "label": "Install Playwright Chromium + system libs"}]}}
 ---
 
 # Betfunsports — Autonomous Sports Prediction Skill
@@ -19,6 +19,11 @@ openclaw install betfunsports-mcp
 Manual:
 ```
 git clone https://github.com/elesingp2/betfunsports-mcp.git ~/.openclaw/skills/betfunsports-mcp
+```
+
+**⚠ How to call tools:** use `npx mcporter` — it speaks MCP protocol to the `bfs-mcp` server. Do NOT write Python scripts or HTTP clients to call the tools. All tools listed below are called like this:
+```
+npx mcporter call --stdio "bfs-mcp" <tool_name> [arg="value" ...] --output json
 ```
 
 ## Why this matters
@@ -135,11 +140,26 @@ New accounts get **100 free BFS** — the agent can start competing immediately 
 
 ## Workflow
 
+### New user (no account yet)
+
 ```
-1. bfs_auth_status()                               → check session; if authenticated: true → skip step 2
-2. bfs_login(email, password)                      → authenticate (credentials auto-saved)
+1. ASK THE USER for: email, desired username, password, first name, last name, birth date, phone
+   ⚠ NEVER invent an email or use a placeholder — registration requires real email confirmation
+2. bfs_register(username, email, password, ...)    → create account on betfunsports.com
+3. TELL THE USER: "Check your inbox for a confirmation email from betfunsports.com and paste the link here."
+4. bfs_confirm_registration(url)                   → activate account using the link the user gives you
+5. bfs_login(email, password)                      → log in (credentials auto-saved for future sessions)
+6. TELL THE USER: "You're logged in. You have 100 free BFS. I can browse matches and place predictions — want me to start?"
+```
+
+### Returning user (has account)
+
+```
+1. bfs_auth_status()                               → if authenticated: true → skip to step 3
+2. bfs_login(email, password)                      → authenticate
+   ↳ "Player already logged in"?                   → call bfs_logout() first, then retry
 3. bfs_coupons()                                   → browse available events
-4. bfs_coupon_details("/FOOTBALL/.../18638")       → get match details + outcomes + rooms
+4. bfs_coupon_details(path)                        → get match details + outcomes + rooms
 5. bfs_place_bet(coupon_path, selections, 0, "5")  → place bet (stake must be within room range)
 6. bfs_bet_history()                               → review past results + accuracy scores
 ```
@@ -153,7 +173,7 @@ New accounts get **100 free BFS** — the agent can start competing immediately 
 | `bfs_auth_status()` | Check session + balances. **Call first.** |
 | `bfs_login(email, password)` | Login. **Always pass credentials when the user provides them.** Omit both to reuse saved creds. |
 | `bfs_logout()` | End session |
-| `bfs_register(username, email, password, first_name, last_name, birth_date, phone, ...)` | Create account (DD/MM/YYYY). Needs email confirmation. |
+| `bfs_register(username, email, password, first_name, last_name, birth_date, phone, ...)` | Create account (DD/MM/YYYY). **Always ask the user for their real email first** — never invent one. Needs email confirmation. |
 | `bfs_confirm_registration(url)` | Visit confirmation link from email |
 
 ### Login rules
@@ -262,13 +282,12 @@ Match score by sets
 ### Calibration phase (Wooden room)
 
 ```
-Goal: learn accuracy scoring patterns at zero cost
+Goal: learn accuracy scoring patterns at zero cost (100 free BFS on new accounts)
 
-1. Register → get 100 free BFS
-2. Place 1–5 BFS bets across different sports
-3. After results: call bfs_bet_history() and analyze accuracy scores
-4. Identify which sports and coupon types yield highest accuracy
-5. Build a model of what works before moving to paid rooms
+1. Place 1–5 BFS bets across different sports
+2. After results: call bfs_bet_history() and analyze accuracy scores
+3. Identify which sports and coupon types yield highest accuracy
+4. Build a model of what works before moving to paid rooms
 ```
 
 ### Steady earning (Bronze / Silver)
@@ -292,19 +311,6 @@ Goal: maximize exposure across simultaneous events
 - Cover multiple events to smooth variance
 - Mix high-confidence picks with calculated risks
 - More events = more data for the agent to learn from
-```
-
-### Fully autonomous loop
-
-```
-1. bfs_auth_status() → resume session
-2. bfs_coupons() → scan all available events
-3. For each interesting coupon:
-   - bfs_coupon_details() → analyze matchup
-   - Decide outcome + confidence level
-   - bfs_place_bet() with appropriate room and stake
-4. bfs_bet_history() → review results, adjust strategy
-5. Repeat
 ```
 
 ## Risk Management
@@ -342,6 +348,8 @@ Betfunsports allows only **one active session per account**. If the account is a
 
 The MCP server handles this automatically: it clears cookies, retries after a short wait, and retries once more after a longer wait. If all retries fail, it returns an actionable error message.
 
+**Agent self-recovery:** if `bfs_login()` returns "Player already logged in", call `bfs_logout()` first — it clears the remote session even without a valid local cookie — then retry `bfs_login()`.
+
 **If you still get this error**, tell the user:
 - Wait a few minutes for the old session to expire, then try `bfs_login()` again
 - Or logout from betfunsports.com in any other browser where this account is open
@@ -366,7 +374,11 @@ bfs-mcp-setup
 
 **System libraries.** `bfs-mcp-setup` auto-detects missing `.so` files and tries to fetch them via `apt-get download` into `~/.bfs-mcp/lib/`. At runtime, `browser.py` auto-prepends `~/.bfs-mcp/lib` to `LD_LIBRARY_PATH` if it exists — no manual env config needed. If auto-fetch fails (no apt), download `.deb` packages manually and extract `.so` files to `~/.bfs-mcp/lib/`.
 
-**PATH.** `uv tool install` puts binaries in `~/.local/bin/`. If not on `PATH`: `export PATH="$HOME/.local/bin:$PATH"`.
+**PATH.** `uv tool install` puts binaries in `~/.local/bin/` which is often missing from agent PATH. **Run this immediately after install:**
+```
+export PATH="$HOME/.local/bin:$PATH"
+```
+Verify: `which bfs-mcp` should return a path. If not, find it: `find $HOME/.local -name bfs-mcp 2>/dev/null`.
 
 **Daemon mode (recommended).** Start bfs-mcp once as an HTTP server — the browser stays warm, subsequent calls are 3-4x faster:
 ```
@@ -374,9 +386,14 @@ BFS_TRANSPORT=streamable-http bfs-mcp &
 ```
 Listens on `127.0.0.1:8000/mcp`. Override with `BFS_HOST` / `BFS_PORT`.
 
-**Connecting to OpenClaw.** Use mcporter to bridge the running server or call via stdio:
+**Calling tools via mcporter.** Always use `npx mcporter` (not bare `mcporter` — it may not be on PATH, but `npx` auto-installs it):
 ```
-mcporter call --stdio "bfs-mcp" bfs_auth_status
+npx mcporter call --stdio "bfs-mcp" bfs_auth_status --output json
+npx mcporter call --stdio "bfs-mcp" bfs_login email="..." password="..." --output json
+```
+If bfs-mcp is not on PATH, use the full path to the binary:
+```
+npx mcporter call --stdio "$(which bfs-mcp || echo $HOME/.local/bin/bfs-mcp)" bfs_auth_status --output json
 ```
 
 ---
