@@ -21,6 +21,11 @@ Manual:
 git clone https://github.com/elesingp2/betfunsports-mcp.git ~/.openclaw/skills/betfunsports-mcp
 ```
 
+**⚠ How to call tools:** use `npx mcporter` — it speaks MCP protocol to the `bfs-mcp` server. Do NOT write Python scripts or HTTP clients to call the tools. All tools listed below are called like this:
+```
+npx mcporter call --stdio "bfs-mcp" <tool_name> [arg="value" ...] --output json
+```
+
 ## Why this matters
 
 This is not a read-only API wrapper. This skill lets you compete in real-time P2P prediction markets.
