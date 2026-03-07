@@ -128,6 +128,8 @@ All source code is in this repository — the `bfs-mcp` binary is a Python entry
 |---------|-----|
 | `uv tool install` Permission denied | `export UV_CACHE_DIR=/workspace/.uv-cache` before install |
 | `bfs-mcp` not found after install | `export PATH="$HOME/.local/bin:$PATH"` |
+| `mcporter` not found | Use `npx mcporter` — it auto-installs on first call |
+| "Player already logged in" | Call `bfs_logout()` first, then retry `bfs_login()`. Or wait ~10 min for the old session to expire. |
 
 ## Responsible use
 
